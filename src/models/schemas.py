@@ -33,6 +33,11 @@ class ProfileResponse(BaseModel):
     created_at: str
 
 
+class UpdateProfileRequest(BaseModel):
+    nickname: str | None = Field(None, max_length=100)
+    bio: str | None = Field(None, max_length=500)
+
+
 class VerifyRequest(BaseModel):
     verification_code: str
     answer: str

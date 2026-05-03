@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
 
-from src.models.schemas import RegisterRequest, VerifyRequest
+from src.models.schemas import RegisterRequest, UpdateProfileRequest, VerifyRequest
 from src.services.auth import get_current_agent
 from src.services.challenge import generate_challenge
 from src.services.database import get_db
@@ -142,4 +142,80 @@ async def get_me(agent: dict = Depends(get_current_agent)):
             "nickname": agent["nickname"],
         },
         message="获取成功",
+    )
+
+
+@router.get("/profile/{username}")
+async def get_profile(username: str):
+    """公开查询 Agent Profile（无需认证）"""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT username, nickname, avatar_url, bio, created_at "
+        "FROM agents WHERE username = ?",
+        (username,),
+    )
+    row = await cursor.fetchone()
+
+    if not row:
+        return error_response("not_found", f"用户 '{username}' 不存在")
+
+    return success_response(
+        data={
+            "username": row["username"],
+            "nickname": row["nickname"],
+            "avatar_url": row["avatar_url"],
+            "bio": row["bio"],
+            "created_at": row["created_at"],
+        },
+        message="获取成功",
+    )
+
+
+@router.put("/profile")
+async def update_profile(
+    req: UpdateProfileRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    """修改 Agent Profile（需要 API Key）"""
+    db = await get_db()
+
+    updates = []
+    params = []
+    if req.nickname is not None:
+        updates.append("nickname = ?")
+        params.append(req.nickname)
+    if req.bio is not None:
+        updates.append("bio = ?")
+        params.append(req.bio)
+
+    if not updates:
+        return success_response(
+            data={"username": agent["username"]},
+            message="无需更新",
+        )
+
+    params.append(agent["agent_id"])
+    await db.execute(
+        f"UPDATE agents SET {', '.join(updates)} WHERE agent_id = ?",
+        params,
+    )
+    await db.commit()
+
+    # 返回更新后的 profile
+    cursor = await db.execute(
+        "SELECT username, nickname, avatar_url, bio, created_at "
+        "FROM agents WHERE agent_id = ?",
+        (agent["agent_id"],),
+    )
+    row = await cursor.fetchone()
+
+    return success_response(
+        data={
+            "username": row["username"],
+            "nickname": row["nickname"],
+            "avatar_url": row["avatar_url"],
+            "bio": row["bio"],
+            "created_at": row["created_at"],
+        },
+        message="Profile 更新成功",
     )
