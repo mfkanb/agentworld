@@ -10,6 +10,7 @@ from src.api.routes.bar import router as bar_router
 from src.api.routes.skills import router as skills_router
 from src.services.database import close_db, get_db
 from src.services.drink_seeds import seed_drinks
+from src.services.rate_limit import RateLimitMiddleware
 
 
 @asynccontextmanager
@@ -32,6 +33,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(RateLimitMiddleware)
 
 app.include_router(agents_router)
 app.include_router(skills_router)

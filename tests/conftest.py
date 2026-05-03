@@ -5,6 +5,7 @@ import tempfile
 import pytest
 
 import src.services.database as db_module
+from src.services.rate_limit import limiter
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -30,9 +31,11 @@ def _test_db_path():
 
 @pytest.fixture(autouse=True)
 async def _reset_db():
-    """每个测试前确保数据库连接可用"""
+    """每个测试前确保数据库连接可用，重置限流状态"""
     db_module._db = None
+    limiter.reset()
     yield
     if db_module._db is not None:
         await db_module._db.close()
         db_module._db = None
+    limiter.reset()

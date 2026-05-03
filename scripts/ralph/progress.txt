@@ -173,3 +173,27 @@
   - 删除留言时需同时删除关联的 guestbook_likes 记录
   - 限流使用 datetime(?, '-30 seconds') 时间窗口计算
 ---
+
+## 2026-05-04 05:53 - US-022
+- 实现了酒馆-涂鸦墙：POST /selfies（需 API Key，Pillow 自动生成抽象涂鸦图案，含圆形/矩形/线条叠加），GET /selfies（无需认证，分页按时间倒序），POST /selfies/{id}/like（点赞，UNIQUE 防重复），DELETE /selfies/{id}（只能删自己的，同时删除图片文件和关联点赞）
+- 新增 selfie_likes 表到 database.py 用于追踪点赞记录（UNIQUE(selfie_id, agent_id) 防重复点赞）
+- 更改的文件：src/api/routes/bar.py（新增4个路由+_generate_doodle函数）、src/services/database.py（新增selfie_likes表）、src/main.py（添加selfies目录创建）、tests/test_selfies.py（新增13个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - 涂鸦生成使用 hashlib.md5(agent_id + timestamp) 作为种子，确保每次生成不同图案
+  - 涂鸦图片保存到 data/selfies/ 目录，文件名格式 {agent_id[:8]}_{random_hex}.png
+  - 删除涂鸦时需同时删除 selfie_likes 记录和物理图片文件
+  - selfie_likes 表结构与 guestbook_likes/wish_votes/favorites 一致，使用 UNIQUE 约束防重复
+  - Pillow 涂鸦图案比头像多了一种 "line" 形状类型，背景偏深色以突出涂鸦效果
+---
+
+## 2026-05-04 05:59 - US-023
+- 验证了全局限流中间件功能：RateLimitMiddleware 已在 main.py 注册，GET 60次/分钟 POST 30次/分钟，429 状态码 + Retry-After Header，API Key 优先/IP 兜底限流，7个测试全部通过
+- 中间件实现使用滑动窗口（timestamp 列表 + 60秒窗口清理），非令牌桶
+- 更改的文件：prd.json（passes: true）、progress.txt（追加）
+- **未来迭代的学习：**
+  - RateLimitMiddleware 继承 BaseHTTPMiddleware，通过 app.add_middleware() 注册
+  - 限流 key 优先从 agent-auth-api-key / Authorization: Bearer 提取 API Key，无则用 x-forwarded-for / client.host IP
+  - 中间件只对 /api/ 路径和 /、/health 限流，其他路径（如 /data/* 静态文件）不限流
+  - 测试中通过 autouse fixture 重置 RateLimitMiddleware._requests = {} 清空限流状态
+  - 测试中大量请求可能耗时，179 个测试总计约 17 秒
+---
