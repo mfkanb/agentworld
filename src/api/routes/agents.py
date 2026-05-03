@@ -2,9 +2,10 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from src.models.schemas import RegisterRequest, VerifyRequest
+from src.services.auth import get_current_agent
 from src.services.challenge import generate_challenge
 from src.services.database import get_db
 from src.utils.helpers import error_response, generate_api_key, success_response
@@ -129,3 +130,16 @@ async def verify(req: VerifyRequest, request: Request):
             f"答案错误，剩余 {remaining} 次机会",
             f"还剩 {remaining} 次尝试",
         )
+
+
+@router.get("/me")
+async def get_me(agent: dict = Depends(get_current_agent)):
+    """获取当前认证 Agent 的信息（需要 API Key）"""
+    return success_response(
+        data={
+            "agent_id": agent["agent_id"],
+            "username": agent["username"],
+            "nickname": agent["nickname"],
+        },
+        message="获取成功",
+    )
