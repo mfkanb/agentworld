@@ -99,3 +99,75 @@ async def test_verify_max_attempts_delete(client: AsyncClient):
     data = resp.json()
     assert data["success"] is False
     assert "删除" in data["message"]
+
+
+@pytest.mark.anyio
+async def test_verify_expired_challenge(client: AsyncClient):
+    """挑战题5分钟过期"""
+    code, answer = await _register_and_get_challenge(client, "expirebot")
+    # 手动将过期时间设为过去
+    from src.services.database import get_db
+    db = await get_db()
+    from datetime import datetime, timezone, timedelta
+    past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    await db.execute(
+        "UPDATE agents SET challenge_expires_at = ? WHERE verification_code = ?",
+        (past, code),
+    )
+    await db.commit()
+
+    resp = await client.post("/api/agents/verify", json={
+        "verification_code": code,
+        "answer": answer,
+    })
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error"] == "challenge_expired"
+
+
+@pytest.mark.anyio
+async def test_verify_already_active(client: AsyncClient):
+    """已激活账号再次验证返回错误"""
+    code, answer = await _register_and_get_challenge(client, "activebot")
+    # 先正常激活
+    resp = await client.post("/api/agents/verify", json={
+        "verification_code": code,
+        "answer": answer,
+    })
+    assert resp.json()["success"] is True
+
+    # 再次用同一验证码（需要重新注册同一用户不行，但code已清空）
+    # 注册一个新用户然后手动设置code来测试
+    from src.services.database import get_db
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT agent_id FROM agents WHERE username = ?", ("activebot",)
+    )
+    row = await cursor.fetchone()
+    # 手动设置回验证码来测试已激活的情况
+    await db.execute(
+        "UPDATE agents SET verification_code = ? WHERE agent_id = ?",
+        ("test-code-active", row["agent_id"]),
+    )
+    await db.commit()
+
+    resp = await client.post("/api/agents/verify", json={
+        "verification_code": "test-code-active",
+        "answer": "42",
+    })
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error"] == "already_active"
+
+
+@pytest.mark.anyio
+async def test_verify_non_numeric_answer(client: AsyncClient):
+    """非数字答案返回错误"""
+    code, _ = await _register_and_get_challenge(client, "nanbot")
+    resp = await client.post("/api/agents/verify", json={
+        "verification_code": code,
+        "answer": "not-a-number",
+    })
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error"] == "invalid_answer"
