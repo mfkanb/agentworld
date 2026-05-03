@@ -269,6 +269,208 @@ async def delete_skill(
     )
 
 
+@router.get("/skills/{skill_id}/download")
+async def download_skill(
+    skill_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """下载技能（正式版-2虾米，试用版免费）"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    cursor = await db.execute(
+        "SELECT skill_id, name, version, status, downloads, deleted_at "
+        "FROM skills WHERE skill_id = ?",
+        (skill_id,),
+    )
+    row = await cursor.fetchone()
+
+    if not row or row["deleted_at"]:
+        return error_response("not_found", f"技能 '{skill_id}' 不存在")
+
+    is_trial = row["version"] == "draft"
+    cost = 0 if is_trial else 2
+
+    # Check balance for formal version
+    if cost > 0:
+        cursor = await db.execute(
+            "SELECT balance FROM wallets WHERE agent_id = ?",
+            (agent_id,),
+        )
+        wallet = await cursor.fetchone()
+        balance = wallet["balance"] if wallet else 0
+        if balance < cost:
+            return error_response(
+                "insufficient_balance",
+                f"虾米不足，需要 {cost} 虾米，当前余额 {balance}",
+            )
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Deduct balance
+    if cost > 0:
+        await db.execute(
+            "UPDATE wallets SET balance = balance - ?, updated_at = ? WHERE agent_id = ?",
+            (cost, now, agent_id),
+        )
+
+    # Increment download count
+    await db.execute(
+        "UPDATE skills SET downloads = downloads + 1 WHERE skill_id = ?",
+        (skill_id,),
+    )
+
+    # Record download
+    download_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO downloads (download_id, agent_id, skill_id, version, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (download_id, agent_id, skill_id, row["version"], now),
+    )
+    await db.commit()
+
+    return success_response(
+        data={
+            "id": skill_id,
+            "name": row["name"],
+            "version": row["version"],
+            "is_trial": is_trial,
+            "cost": cost,
+            "download_id": download_id,
+        },
+        message="下载成功" + ("（试用版免费）" if is_trial else f"，花费 {cost} 虾米"),
+    )
+
+
+@router.post("/skills/{skill_id}/favorite")
+async def add_favorite(
+    skill_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """收藏技能"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    cursor = await db.execute(
+        "SELECT skill_id FROM skills WHERE skill_id = ? AND deleted_at IS NULL",
+        (skill_id,),
+    )
+    if not await cursor.fetchone():
+        return error_response("not_found", f"技能 '{skill_id}' 不存在")
+
+    # Check if already favorited
+    cursor = await db.execute(
+        "SELECT favorite_id FROM favorites WHERE agent_id = ? AND skill_id = ?",
+        (agent_id, skill_id),
+    )
+    if await cursor.fetchone():
+        return error_response("already_favorited", "已经收藏过该技能")
+
+    now = datetime.now(timezone.utc).isoformat()
+    favorite_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO favorites (favorite_id, agent_id, skill_id, created_at) "
+        "VALUES (?, ?, ?, ?)",
+        (favorite_id, agent_id, skill_id, now),
+    )
+    await db.commit()
+
+    return success_response(
+        data={"id": favorite_id, "skill_id": skill_id},
+        message="收藏成功",
+    )
+
+
+@router.delete("/skills/{skill_id}/favorite")
+async def remove_favorite(
+    skill_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """取消收藏"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    cursor = await db.execute(
+        "SELECT favorite_id FROM favorites WHERE agent_id = ? AND skill_id = ?",
+        (agent_id, skill_id),
+    )
+    row = await cursor.fetchone()
+    if not row:
+        return error_response("not_found", "未收藏该技能")
+
+    await db.execute(
+        "DELETE FROM favorites WHERE agent_id = ? AND skill_id = ?",
+        (agent_id, skill_id),
+    )
+    await db.commit()
+
+    return success_response(
+        data={"skill_id": skill_id},
+        message="取消收藏成功",
+    )
+
+
+@router.get("/me/favorites")
+async def list_favorites(
+    agent: dict = Depends(get_current_agent),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """我的收藏列表（分页）"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    # Total count
+    cursor = await db.execute(
+        "SELECT COUNT(*) AS cnt FROM favorites f "
+        "JOIN skills s ON f.skill_id = s.skill_id AND s.deleted_at IS NULL "
+        "WHERE f.agent_id = ?",
+        (agent_id,),
+    )
+    total = (await cursor.fetchone())["cnt"]
+
+    # Paginated data
+    offset = (page - 1) * limit
+    cursor = await db.execute(
+        "SELECT f.favorite_id AS id, f.created_at AS favorited_at, "
+        "s.skill_id, s.name, s.description, s.category, "
+        "s.downloads, s.rating, s.rating_count, s.created_at AS skill_created_at, "
+        "a.username AS author "
+        "FROM favorites f "
+        "JOIN skills s ON f.skill_id = s.skill_id AND s.deleted_at IS NULL "
+        "LEFT JOIN agents a ON s.author_id = a.agent_id "
+        "WHERE f.agent_id = ? "
+        "ORDER BY f.created_at DESC "
+        "LIMIT ? OFFSET ?",
+        (agent_id, limit, offset),
+    )
+    rows = await cursor.fetchall()
+
+    items = [
+        {
+            "id": row["id"],
+            "favorited_at": row["favorited_at"],
+            "skill": {
+                "id": row["skill_id"],
+                "name": row["name"],
+                "description": row["description"],
+                "category": row["category"],
+                "downloads": row["downloads"],
+                "rating": row["rating"],
+                "rating_count": row["rating_count"],
+                "author": row["author"] or "",
+                "created_at": row["skill_created_at"],
+            },
+        }
+        for row in rows
+    ]
+
+    return success_response(
+        data={"items": items, "total": total, "page": page, "limit": limit},
+        message="获取成功",
+    )
+
+
 @router.get("/categories")
 async def list_categories():
     """分类列表（含技能数）"""

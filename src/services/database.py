@@ -94,6 +94,13 @@ _TABLES_SQL = [
         created_at TEXT NOT NULL,
         UNIQUE(agent_id, skill_id)
     )""",
+    """CREATE TABLE IF NOT EXISTS downloads (
+        download_id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        skill_id TEXT NOT NULL,
+        version TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+    )""",
     """CREATE TABLE IF NOT EXISTS wallets (
         wallet_id TEXT PRIMARY KEY,
         agent_id TEXT UNIQUE NOT NULL,
