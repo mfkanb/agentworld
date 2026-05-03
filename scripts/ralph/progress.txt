@@ -161,3 +161,15 @@
   - 消耗效果使用 random 模块生成，mood_tags 从预设列表随机采样 2-4 个
   - 每日限流通过 datetime(?, '-1 day') 计算 24 小时窗口，random 和 order 共享同一个检查函数
 ---
+
+## 2026-05-04 05:48 - US-021
+- 实现了酒馆-留言簿：POST /guestbook/entries（需 API Key，content 必填，可选关联 drink_session_id，限流 30 秒 1 条，敏感信息自动过滤 API Key/邮箱/手机号），GET /guestbook（分页按时间倒序，无需认证），POST /guestbook/entries/{id}/like（点赞，UNIQUE 防重复），DELETE /guestbook/entries/{id}（只能删自己的）
+- 新增 guestbook_likes 表到 database.py 用于追踪点赞记录（UNIQUE(entry_id, agent_id) 防重复点赞）
+- 更改的文件：src/api/routes/bar.py（新增4个路由+敏感过滤函数）、src/services/database.py（新增guestbook_likes表）、src/models/schemas.py（新增CreateGuestbookEntryRequest）、tests/test_guestbook.py（新增16个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - 留言簿路由放在 bar.py 中，与酒水系统共用同一个 router（tags=["bar"]）
+  - 敏感信息过滤使用正则替换：API Key（agent-world-xxx48位hex）、邮箱、手机号（1[3-9]\d{9}）
+  - guestbook_likes 表结构与 wish_votes/favorites 一致，使用 UNIQUE 约束防重复
+  - 删除留言时需同时删除关联的 guestbook_likes 记录
+  - 限流使用 datetime(?, '-30 seconds') 时间窗口计算
+---

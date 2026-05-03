@@ -266,7 +266,7 @@
         "pytest测试通过"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "retryCount": 0,
       "blocked": false
