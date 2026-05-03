@@ -83,3 +83,14 @@
   - sites 表已在 database.py 中创建，测试需手动插入站点记录
   - verify-key 端点不限制 is_active，未激活 agent 也能查询到（返回 is_active=false）
 ---
+
+## 2026-05-04 23:55 - US-010
+- 实现了虾评-技能列表与详情：GET /api/skills 支持分页(page/limit默认20)、关键词搜索(search)、分类筛选(category)、排序(newest/downloads/rating)；GET /api/skills/{id} 返回完整技能详情含 author 信息；GET /api/categories 返回分类及技能数
+- 更改的文件：src/api/routes/skills.py（新增）、src/main.py（注册 skills_router）、tests/test_skills.py（新增12个测试）
+- **未来迭代的学习：**
+  - skills 路由使用 APIRouter(prefix="/api") 而非 prefix="/api/skills"，因为还需要挂载 /api/categories
+  - 列表查询通过 LEFT JOIN agents 获取 author username
+  - 软删除通过 deleted_at IS NULL 过滤，列表和详情都需要过滤
+  - 测试间 skills 表数据会累积，需要在测试文件中添加 autouse fixture 清空 skills 表
+  - _insert_skill helper 直接操作数据库插入测试数据，避免依赖未实现的发布 API
+---
