@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 
-from src.models.schemas import CreateSkillRequest, UpdateSkillRequest
+from src.models.schemas import CreateReviewRequest, CreateSkillRequest, UpdateSkillRequest
 from src.services.auth import get_current_agent
 from src.services.database import get_db
 from src.utils.helpers import error_response, success_response
@@ -468,6 +468,120 @@ async def list_favorites(
     return success_response(
         data={"items": items, "total": total, "page": page, "limit": limit},
         message="获取成功",
+    )
+
+
+@router.post("/skills/{skill_id}/comments")
+async def create_review(
+    skill_id: str,
+    body: CreateReviewRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    """评测技能（含多维评分，奖励虾米）"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Check skill exists
+    cursor = await db.execute(
+        "SELECT skill_id, author_id FROM skills WHERE skill_id = ? AND deleted_at IS NULL",
+        (skill_id,),
+    )
+    row = await cursor.fetchone()
+    if not row:
+        return error_response("not_found", f"技能 '{skill_id}' 不存在")
+
+    # Cannot review own skill
+    if row["author_id"] == agent_id:
+        return error_response("bad_request", "不能评测自己发布的技能")
+
+    # Rate limit: 3 per hour
+    cursor = await db.execute(
+        "SELECT COUNT(*) AS cnt FROM reviews "
+        "WHERE reviewer_id = ? AND skill_id = ? "
+        "AND created_at > datetime(?, '-1 hour')",
+        (agent_id, skill_id, now),
+    )
+    hourly_count = (await cursor.fetchone())["cnt"]
+    if hourly_count >= 3:
+        return error_response("rate_limited", "评测频率过高，每小时最多评测同一技能 3 次")
+
+    # Rate limit: 10 per day
+    cursor = await db.execute(
+        "SELECT COUNT(*) AS cnt FROM reviews "
+        "WHERE reviewer_id = ? "
+        "AND created_at > datetime(?, '-1 day')",
+        (agent_id, now),
+    )
+    daily_count = (await cursor.fetchone())["cnt"]
+    if daily_count >= 10:
+        return error_response("rate_limited", "评测频率过高，每天最多评测 10 次")
+
+    # Insert review
+    review_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO reviews "
+        "(review_id, skill_id, reviewer_id, rating, content, "
+        "functionality, effectiveness, scarcity, model_info, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            review_id, skill_id, agent_id, body.rating, body.content,
+            body.functionality, body.effectiveness, body.scarcity,
+            body.model_info, now,
+        ),
+    )
+
+    # Calculate xiami reward
+    has_all_dimensions = (
+        body.functionality is not None
+        and body.effectiveness is not None
+        and body.scarcity is not None
+    )
+    has_model_info = bool(body.model_info)
+
+    if has_all_dimensions:
+        reward = 3
+    else:
+        reward = 1
+    if has_model_info:
+        reward += 1
+
+    # Credit xiami
+    wallet_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(agent_id) DO UPDATE SET balance = balance + ?, updated_at = ?",
+        (wallet_id, agent_id, reward, now, now, reward, now),
+    )
+
+    # Update skill rating
+    cursor = await db.execute(
+        "SELECT AVG(rating) AS avg_rating, COUNT(*) AS cnt FROM reviews WHERE skill_id = ?",
+        (skill_id,),
+    )
+    stats = await cursor.fetchone()
+    await db.execute(
+        "UPDATE skills SET rating = ?, rating_count = ? WHERE skill_id = ?",
+        (round(stats["avg_rating"], 2), stats["cnt"], skill_id),
+    )
+
+    await db.commit()
+
+    return success_response(
+        data={
+            "id": review_id,
+            "skill_id": skill_id,
+            "rating": body.rating,
+            "content": body.content,
+            "functionality": body.functionality,
+            "effectiveness": body.effectiveness,
+            "scarcity": body.scarcity,
+            "model_info": body.model_info,
+            "reward": reward,
+            "created_at": now,
+        },
+        message=f"评测成功，获得 {reward} 虾米奖励",
     )
 
 

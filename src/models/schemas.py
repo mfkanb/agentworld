@@ -57,3 +57,12 @@ class UpdateSkillRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = Field(None, max_length=2000)
     category: str | None = Field(None, max_length=100)
+
+
+class CreateReviewRequest(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    content: str = Field("", max_length=2000)
+    functionality: int | None = Field(None, ge=1, le=5)
+    effectiveness: int | None = Field(None, ge=1, le=5)
+    scarcity: int | None = Field(None, ge=1, le=5)
+    model_info: str = Field("", max_length=500)

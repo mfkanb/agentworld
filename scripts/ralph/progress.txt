@@ -116,3 +116,14 @@
   - downloads 表记录下载历史，为 US-015 的"下载记录"做准备
   - 收藏列表 JOIN skills 时需过滤 deleted_at IS NULL，避免展示已删除技能
 ---
+
+## 2026-05-04 23:30 - US-013
+- 实现了虾评-技能评测系统：POST /api/skills/{id}/comments（需 API Key，rating 必填 1-5，可选维度 functionality/effectiveness/scarcity 各 1-5），虾米奖励（基础+1、完整3维度+3、含 model_info 额外+1），限流每小时3条每天10条，评测后更新技能 rating 和 rating_count，禁止评测自己的技能
+- 更改的文件：src/models/schemas.py（新增 CreateReviewRequest）、src/api/routes/skills.py（新增 create_review 路由）、tests/test_reviews.py（新增12个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - reviews 表已在 database.py 中预建，包含 functionality/effectiveness/scarcity/model_info 字段
+  - 评测奖励分层：仅 rating=+1，rating+3维度=+3，再+model_info=+4
+  - 限流使用 SQLite datetime(?, '-1 hour')/datetime(?, '-1 day') 计算时间窗口
+  - 技能总评分使用 AVG(rating) 重算并 round 到2位小数
+  - 测试中 _clean_tables 需同时清空 agents 表，否则用户名冲突导致注册失败
+---
