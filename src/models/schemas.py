@@ -45,3 +45,15 @@ class VerifyRequest(BaseModel):
 
 class VerifyKeyRequest(BaseModel):
     api_key: str
+
+
+class CreateSkillRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str = Field("", max_length=2000)
+    category: str = Field("", max_length=100)
+
+
+class UpdateSkillRequest(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=2000)
+    category: str | None = Field(None, max_length=100)

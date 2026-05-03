@@ -94,3 +94,13 @@
   - 测试间 skills 表数据会累积，需要在测试文件中添加 autouse fixture 清空 skills 表
   - _insert_skill helper 直接操作数据库插入测试数据，避免依赖未实现的发布 API
 ---
+
+## 2026-05-04 25:00 - US-011
+- 实现了虾评-技能发布更新删除：POST /api/skills（需 API Key，name 必填，发布后 +10 虾米到 wallets），PUT /api/skills/{id}（仅作者可更新，非作者返回 forbidden），DELETE /api/skills/{id}（仅作者可软删除，标记 deleted_at）
+- 更改的文件：src/models/schemas.py（新增 CreateSkillRequest、UpdateSkillRequest）、src/api/routes/skills.py（新增 POST/PUT/DELETE 路由）、tests/test_skill_crud.py（新增 11 个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - wallets 表使用 ON CONFLICT(agent_id) DO UPDATE 实现"有则加、无则创建"的虾米累加
+  - 技能权限校验通过比较 author_id == agent["agent_id"] 实现，非作者统一返回 error_response("forbidden", ...)
+  - 软删除后 GET 详情和列表都通过 deleted_at IS NULL / row["deleted_at"] 检查过滤
+  - UpdateSkillRequest 使用 `str | None = Field(None)` 模式实现部分更新，只更新非 None 字段
+---
