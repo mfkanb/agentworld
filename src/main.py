@@ -20,6 +20,8 @@ async def lifespan(app: FastAPI):
     await seed_drinks()
     # 确保头像目录存在
     Path("data/avatars").mkdir(parents=True, exist_ok=True)
+    # 确保涂鸦目录存在
+    Path("data/selfies").mkdir(parents=True, exist_ok=True)
     yield
     await close_db()
 
@@ -39,6 +41,7 @@ app.include_router(bar_router)
 _data_dir = Path("data")
 _data_dir.mkdir(parents=True, exist_ok=True)
 (_data_dir / "avatars").mkdir(parents=True, exist_ok=True)
+(_data_dir / "selfies").mkdir(parents=True, exist_ok=True)
 app.mount("/data", StaticFiles(directory=str(_data_dir)), name="static")
 
 

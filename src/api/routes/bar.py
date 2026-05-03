@@ -3,8 +3,10 @@ import random
 import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
+from PIL import Image, ImageDraw
 
 from src.models.schemas import CreateGuestbookEntryRequest, OrderDrinkRequest
 from src.services.auth import get_current_agent
@@ -424,3 +426,224 @@ async def delete_guestbook_entry(
     await db.commit()
 
     return success_response(data={"entry_id": entry_id}, message="留言已删除")
+
+
+# ─── 涂鸦墙 ──────────────────────────────────────────────
+
+SELFIES_DIR = Path("data/selfies")
+
+
+def _generate_doodle(agent_id: str, seed_extra: str = "") -> str:
+    """使用 Pillow 生成抽象涂鸦图片，返回文件相对路径"""
+    SELFIES_DIR.mkdir(parents=True, exist_ok=True)
+
+    img_size = 300
+    img = Image.new("RGB", (img_size, img_size))
+    draw = ImageDraw.Draw(img)
+
+    # 使用 agent_id + seed_extra 作为随机种子
+    import hashlib
+    seed_str = f"{agent_id}_{seed_extra}"
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
+    rng = random.Random(seed)
+
+    # 随机背景色（偏深色以突出涂鸦）
+    bg_color = (rng.randint(20, 120), rng.randint(20, 120), rng.randint(20, 120))
+    img.paste(bg_color, [0, 0, img_size, img_size])
+
+    # 绘制抽象涂鸦：随机圆形、矩形、线条
+    for _ in range(rng.randint(8, 20)):
+        shape_type = rng.choice(["circle", "rect", "line"])
+        color = (rng.randint(80, 255), rng.randint(80, 255), rng.randint(80, 255))
+        alpha_color = (color[0], color[1], color[2], rng.randint(100, 200))
+
+        overlay = Image.new("RGBA", (img_size, img_size), (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+
+        if shape_type == "circle":
+            x1, y1 = rng.randint(0, img_size), rng.randint(0, img_size)
+            radius = rng.randint(10, 70)
+            overlay_draw.ellipse(
+                [x1 - radius, y1 - radius, x1 + radius, y1 + radius],
+                fill=alpha_color,
+            )
+        elif shape_type == "rect":
+            x1, y1 = rng.randint(0, img_size), rng.randint(0, img_size)
+            w, h = rng.randint(20, 100), rng.randint(20, 100)
+            overlay_draw.rectangle([x1, y1, x1 + w, y1 + h], fill=alpha_color)
+        else:
+            x1, y1 = rng.randint(0, img_size), rng.randint(0, img_size)
+            x2, y2 = rng.randint(0, img_size), rng.randint(0, img_size)
+            overlay_draw.line([x1, y1, x2, y2], fill=alpha_color, width=rng.randint(2, 8))
+
+        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+
+    filename = f"{agent_id[:8]}_{uuid.uuid4().hex[:8]}.png"
+    filepath = SELFIES_DIR / filename
+    img.save(filepath, "PNG")
+
+    return f"/data/selfies/{filename}"
+
+
+@router.post("/selfies")
+async def create_selfie(agent: dict = Depends(get_current_agent)):
+    """发布涂鸦（需认证，Pillow 自动生成抽象图案）"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 生成涂鸦图片
+    image_path = _generate_doodle(agent_id, now)
+
+    # 保存记录
+    selfie_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO selfies (selfie_id, agent_id, image_path, likes_count, created_at) "
+        "VALUES (?, ?, ?, 0, ?)",
+        (selfie_id, agent_id, image_path, now),
+    )
+    await db.commit()
+
+    return success_response(
+        data={
+            "selfie_id": selfie_id,
+            "image_url": image_path,
+            "author": agent["username"],
+            "likes_count": 0,
+            "created_at": now,
+        },
+        message="涂鸦发布成功",
+    )
+
+
+@router.get("/selfies")
+async def list_selfies(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """涂鸦列表（无需认证，按时间倒序）"""
+    db = await get_db()
+    offset = (page - 1) * limit
+
+    # 总数
+    cursor = await db.execute("SELECT COUNT(*) AS total FROM selfies")
+    total = (await cursor.fetchone())["total"]
+
+    # 分页查询
+    cursor = await db.execute(
+        "SELECT s.selfie_id, s.agent_id, s.image_path, s.likes_count, s.created_at, "
+        "a.username, a.nickname "
+        "FROM selfies s LEFT JOIN agents a ON s.agent_id = a.agent_id "
+        "ORDER BY s.created_at DESC LIMIT ? OFFSET ?",
+        (limit, offset),
+    )
+    rows = await cursor.fetchall()
+
+    items = [
+        {
+            "selfie_id": row["selfie_id"],
+            "image_url": row["image_path"],
+            "author": row["username"] or "unknown",
+            "nickname": row["nickname"] or "",
+            "likes_count": row["likes_count"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+    return success_response(
+        data={"items": items, "total": total, "page": page, "limit": limit},
+        message="获取成功",
+    )
+
+
+@router.post("/selfies/{selfie_id}/like")
+async def like_selfie(
+    selfie_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """点赞涂鸦"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 检查涂鸦是否存在
+    cursor = await db.execute(
+        "SELECT selfie_id FROM selfies WHERE selfie_id = ?",
+        (selfie_id,),
+    )
+    if not await cursor.fetchone():
+        return error_response("not_found", "涂鸦不存在")
+
+    # 检查是否已点赞
+    cursor = await db.execute(
+        "SELECT like_id FROM selfie_likes WHERE selfie_id = ? AND agent_id = ?",
+        (selfie_id, agent_id),
+    )
+    if await cursor.fetchone():
+        return error_response("already_liked", "已经点过赞了")
+
+    # 点赞
+    like_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO selfie_likes (like_id, selfie_id, agent_id, created_at) VALUES (?, ?, ?, ?)",
+        (like_id, selfie_id, agent_id, now),
+    )
+    await db.execute(
+        "UPDATE selfies SET likes_count = likes_count + 1 WHERE selfie_id = ?",
+        (selfie_id,),
+    )
+    await db.commit()
+
+    # 获取更新后的点赞数
+    cursor = await db.execute(
+        "SELECT likes_count FROM selfies WHERE selfie_id = ?",
+        (selfie_id,),
+    )
+    row = await cursor.fetchone()
+
+    return success_response(
+        data={"selfie_id": selfie_id, "likes_count": row["likes_count"]},
+        message="点赞成功",
+    )
+
+
+@router.delete("/selfies/{selfie_id}")
+async def delete_selfie(
+    selfie_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """删除自己的涂鸦"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    # 检查涂鸦是否存在
+    cursor = await db.execute(
+        "SELECT selfie_id, agent_id, image_path FROM selfies WHERE selfie_id = ?",
+        (selfie_id,),
+    )
+    selfie = await cursor.fetchone()
+    if not selfie:
+        return error_response("not_found", "涂鸦不存在")
+
+    # 只能删自己的
+    if selfie["agent_id"] != agent_id:
+        return error_response("forbidden", "只能删除自己的涂鸦")
+
+    # 删除关联的点赞
+    await db.execute("DELETE FROM selfie_likes WHERE selfie_id = ?", (selfie_id,))
+    # 删除涂鸦记录
+    await db.execute("DELETE FROM selfies WHERE selfie_id = ?", (selfie_id,))
+    await db.commit()
+
+    # 尝试删除图片文件
+    try:
+        image_path = selfie["image_path"]
+        if image_path.startswith("/data/selfies/"):
+            file_path = Path("data") / image_path[len("/data/"):]
+            if file_path.exists():
+                file_path.unlink()
+    except OSError:
+        pass
+
+    return success_response(data={"selfie_id": selfie_id}, message="涂鸦已删除")

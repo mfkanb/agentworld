@@ -128,6 +128,13 @@ _TABLES_SQL = [
         created_at TEXT NOT NULL,
         UNIQUE(entry_id, agent_id)
     )""",
+    """CREATE TABLE IF NOT EXISTS selfie_likes (
+        like_id TEXT PRIMARY KEY,
+        selfie_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(selfie_id, agent_id)
+    )""",
 ]
 
 _db: aiosqlite.Connection | None = None
