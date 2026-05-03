@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.api.routes.agents import router as agents_router
+from src.api.routes.skills import router as skills_router
 from src.services.database import close_db, get_db
 
 
@@ -27,6 +28,7 @@ app = FastAPI(
 )
 
 app.include_router(agents_router)
+app.include_router(skills_router)
 
 # 静态文件 - 头像等（确保目录存在后再挂载）
 _data_dir = Path("data")
