@@ -11,6 +11,8 @@
 - 认证中间件从 agent-auth-api-key 或 Authorization: Bearer 提取 Key
 - 不要删除任何现有文件，只添加和修改
 - 不要运行 git checkout/reset 等破坏性命令
+- conftest.py 使用临时数据库隔离测试，避免用户名冲突
+- 数据库单例 _db 需要在测试间重置，否则会复用旧连接
 
 
 ## 2026-05-04 22:30 - US-001
@@ -31,4 +33,43 @@
   - US-002 的代码（路由/服务/模型/测试）已在上一次迭代中完整实现，本次仅验证通过
   - test_health.py 的 test_db_file_location 需要 skip :memory: 模式
   - 已有 challenge.py 负责生成混淆数学题，auth.py 负责认证中间件，verify 路由也已存在
+---
+
+## 2026-05-04 22:50 - US-003
+- 验证了挑战题验证与激活功能：POST /api/agents/verify 完整实现，包含验证码校验、5分钟过期、数字答案验证、api_key生成(agent-world-+48位)、错误次数扣减、5次失败删除
+- 新增 tests/conftest.py（临时数据库隔离），tests/test_verify.py（新增过期/已激活/非数字答案测试）
+- 更改的文件：tests/conftest.py（新增）、tests/test_verify.py（新增3个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - 测试间共享数据库单例会导致用户名冲突，conftest.py 通过临时数据库+每次测试重置解决
+  - verify 路由已实现完整：验证码查找、过期检查、答案比较(浮点容差0.01)、激活/删除逻辑
+  - 已激活账号的验证码会被清空（verification_code = ''），防止重用
+---
+
+## 2026-05-04 02:56 - US-004
+- 实现了 API Key 认证中间件：auth.py 提供 get_current_agent 依赖，支持 agent-auth-api-key 和 Authorization: Bearer 两种方式；新增 /api/agents/me 端点验证中间件
+- 更改的文件：src/services/auth.py（已存在，新增）、src/api/routes/agents.py（添加 Depends 导入和 /me 路由）、tests/test_auth.py（新增7个测试覆盖所有验收标准）
+- **未来迭代的学习：**
+  - get_current_agent 作为 FastAPI Depends 注入，返回 dict{agent_id, username, nickname}
+  - 中间件中 agent-auth-api-key 优先于 Authorization: Bearer（两种同时存在时取前者）
+  - 401/403 错误通过 HTTPException detail=dict 返回，包含 error/message/hint
+  - 测试中通过 _create_active_agent helper 快速获取有效 API Key
+---
+
+## 2026-05-04 03:03 - US-005
+- 实现了 Profile 查询与修改：GET /api/agents/profile/{username} 公开查询返回 username/nickname/avatar_url/bio/created_at，不存在返回 error_response(not_found)；PUT /api/agents/profile 需 API Key 认证，通过 UpdateProfileRequest Pydantic 模型限制 nickname<=100/bio<=500 超长 422，只允许修改 nickname/bio 不允许改 username/agent_id
+- 更改的文件：src/models/schemas.py（新增 UpdateProfileRequest）、src/api/routes/agents.py（新增 get_profile/update_profile 路由）、tests/test_profile.py（新增 10 个测试）
+- **未来迭代的学习：**
+  - UpdateProfileRequest 使用 `str | None = Field(None, max_length=N)` 模式，只在非 None 时更新，支持部分更新
+  - error_response 的 not_found 不返回 HTTP 404 状态码，而是返回 200 + success:false（与现有 pattern 一致）
+  - PUT 路由复用 get_current_agent 依赖注入，无需额外认证逻辑
+---
+
+## 2026-05-04 23:30 - US-006
+- 实现了头像上传与 AI 默认头像：POST /api/agents/avatar 支持 JPEG/PNG/WebP/GIF（415 拒绝不支持的类型），5MB 限制（413 超大文件），上传后更新 avatar_url；激活时 Pillow 自动生成抽象图案默认头像（基于 agent_id 的种子随机圆形/矩形叠加）
+- 更改的文件：src/services/avatar.py（新增）、src/api/routes/agents.py（添加 upload_avatar 路由 + verify 路由增加默认头像生成）、src/main.py（添加 StaticFiles 挂载）、.gitignore（添加 data/avatars/）、tests/test_avatar.py（新增 7 个测试）、tests/test_profile.py（修复 avatar_url 断言）
+- **未来迭代的学习：**
+  - 头像文件存储在 data/avatars/ 目录，avatar_url 格式为 /data/avatars/{agent_id}.{ext}
+  - Pillow 默认头像生成使用 agent_id UUID 作为随机种子，保证同一 agent 每次生成相同图案
+  - StaticFiles 挂载需要在模块加载时确保目录存在，否则会抛异常
+  - 新功能（默认头像）可能影响已有测试的断言，如 test_profile.py 的 avatar_url 空字符串断言需要更新
 ---

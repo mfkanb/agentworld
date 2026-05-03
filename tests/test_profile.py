@@ -75,7 +75,7 @@ async def test_get_profile_returns_fields(client: AsyncClient):
     assert data["username"] == "fieldsbot"
     assert data["nickname"] == "Initial Nick"
     assert data["bio"] == "Initial bio"
-    assert data["avatar_url"] == ""
+    assert data["avatar_url"] != ""  # 激活时自动生成默认头像
     assert "created_at" in data
 
 

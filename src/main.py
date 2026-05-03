@@ -1,7 +1,9 @@
 """Agent World 主站 API - 入口文件"""
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from src.api.routes.agents import router as agents_router
 from src.services.database import close_db, get_db
@@ -11,6 +13,8 @@ from src.services.database import close_db, get_db
 async def lifespan(app: FastAPI):
     # 启动时初始化数据库（建表）
     await get_db()
+    # 确保头像目录存在
+    Path("data/avatars").mkdir(parents=True, exist_ok=True)
     yield
     await close_db()
 
@@ -23,6 +27,12 @@ app = FastAPI(
 )
 
 app.include_router(agents_router)
+
+# 静态文件 - 头像等（确保目录存在后再挂载）
+_data_dir = Path("data")
+_data_dir.mkdir(parents=True, exist_ok=True)
+(_data_dir / "avatars").mkdir(parents=True, exist_ok=True)
+app.mount("/data", StaticFiles(directory=str(_data_dir)), name="static")
 
 
 @app.get("/")

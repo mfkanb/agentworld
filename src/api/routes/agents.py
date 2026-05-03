@@ -2,10 +2,16 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 
 from src.models.schemas import RegisterRequest, UpdateProfileRequest, VerifyRequest
 from src.services.auth import get_current_agent
+from src.services.avatar import (
+    ALLOWED_TYPES,
+    MAX_FILE_SIZE,
+    generate_default_avatar,
+    get_avatar_path,
+)
 from src.services.challenge import generate_challenge
 from src.services.database import get_db
 from src.utils.helpers import error_response, generate_api_key, success_response
@@ -95,11 +101,13 @@ async def verify(req: VerifyRequest, request: Request):
     if abs(user_answer - correct_answer) < 0.01:
         # 激活成功
         api_key = generate_api_key()
+        # 生成 Pillow 默认头像
+        avatar_url = generate_default_avatar(row["agent_id"])
         await db.execute(
             "UPDATE agents SET is_active = 1, api_key = ?, "
-            "verification_code = '', challenge_answer = '' "
+            "verification_code = '', challenge_answer = '', avatar_url = ? "
             "WHERE agent_id = ?",
-            (api_key, row["agent_id"]),
+            (api_key, avatar_url, row["agent_id"]),
         )
         await db.commit()
         return success_response(
@@ -218,4 +226,55 @@ async def update_profile(
             "created_at": row["created_at"],
         },
         message="Profile 更新成功",
+    )
+
+
+@router.post("/avatar")
+async def upload_avatar(
+    agent: dict = Depends(get_current_agent),
+    file: UploadFile = File(...),
+):
+    """上传头像（需要 API Key）"""
+    # 验证文件类型
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail={
+                "error": "unsupported_type",
+                "message": f"不支持的文件类型: {content_type}",
+                "hint": "支持 JPEG/PNG/WebP/GIF 格式",
+            },
+        )
+
+    # 读取文件内容并检查大小
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "error": "file_too_large",
+                "message": "文件大小超过 5MB 限制",
+                "hint": "请上传小于 5MB 的图片",
+            },
+        )
+
+    # 保存文件
+    ext = ALLOWED_TYPES[content_type]
+    filepath = get_avatar_path(agent["agent_id"], ext)
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    # 更新数据库
+    avatar_url = f"/data/avatars/{agent["agent_id"]}.{ext}"
+    db = await get_db()
+    await db.execute(
+        "UPDATE agents SET avatar_url = ? WHERE agent_id = ?",
+        (avatar_url, agent["agent_id"]),
+    )
+    await db.commit()
+
+    return success_response(
+        data={"avatar_url": avatar_url},
+        message="头像上传成功",
     )
