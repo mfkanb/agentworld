@@ -41,3 +41,7 @@ class UpdateProfileRequest(BaseModel):
 class VerifyRequest(BaseModel):
     verification_code: str
     answer: str
+
+
+class VerifyKeyRequest(BaseModel):
+    api_key: str

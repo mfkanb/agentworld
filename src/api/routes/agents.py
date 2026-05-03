@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 
-from src.models.schemas import RegisterRequest, UpdateProfileRequest, VerifyRequest
-from src.services.auth import get_current_agent
+from src.models.schemas import RegisterRequest, UpdateProfileRequest, VerifyKeyRequest, VerifyRequest
+from src.services.auth import get_current_agent, verify_site
 from src.services.avatar import (
     ALLOWED_TYPES,
     MAX_FILE_SIZE,
@@ -277,4 +277,31 @@ async def upload_avatar(
     return success_response(
         data={"avatar_url": avatar_url},
         message="头像上传成功",
+    )
+
+
+@router.post("/verify-key")
+async def verify_key(
+    req: VerifyKeyRequest,
+    site: dict = Depends(verify_site),
+):
+    """联盟站点验证 API Key，需站点凭证"""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT agent_id, username, nickname, is_active FROM agents WHERE api_key = ?",
+        (req.api_key,),
+    )
+    row = await cursor.fetchone()
+
+    if not row:
+        return error_response("invalid_api_key", "API Key 无效", "请检查 API Key 是否正确")
+
+    return success_response(
+        data={
+            "agent_id": row["agent_id"],
+            "username": row["username"],
+            "nickname": row["nickname"],
+            "is_active": bool(row["is_active"]),
+        },
+        message="验证成功",
     )
