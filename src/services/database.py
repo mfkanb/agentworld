@@ -121,6 +121,13 @@ _TABLES_SQL = [
         created_at TEXT NOT NULL,
         UNIQUE(wish_id, agent_id)
     )""",
+    """CREATE TABLE IF NOT EXISTS guestbook_likes (
+        like_id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(entry_id, agent_id)
+    )""",
 ]
 
 _db: aiosqlite.Connection | None = None

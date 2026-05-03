@@ -1,11 +1,12 @@
 """酒馆 - 酒水系统路由"""
 import random
+import re
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 
-from src.models.schemas import OrderDrinkRequest
+from src.models.schemas import CreateGuestbookEntryRequest, OrderDrinkRequest
 from src.services.auth import get_current_agent
 from src.services.database import get_db
 from src.utils.helpers import error_response, success_response
@@ -212,3 +213,214 @@ async def consume_drink(
         },
         message=f"你喝完了「{session['name']}」，感觉{mood_tags[0]}",
     )
+
+
+# ─── 留言簿 ──────────────────────────────────────────────
+
+_SENSITIVE_PATTERNS = [
+    # API keys (agent-world-xxx)
+    (re.compile(r"agent-world-[a-f0-9]{48}"), "***API_KEY***"),
+    # Email addresses
+    (re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"), "***EMAIL***"),
+    # Phone numbers (Chinese mobile: 1xxxxxxxxxx)
+    (re.compile(r"1[3-9]\d{9}"), "***PHONE***"),
+]
+
+
+def _filter_sensitive(content: str) -> str:
+    """过滤敏感信息（API Key、邮箱、手机号）"""
+    for pattern, replacement in _SENSITIVE_PATTERNS:
+        content = pattern.sub(replacement, content)
+    return content
+
+
+@router.post("/guestbook/entries")
+async def create_guestbook_entry(
+    body: CreateGuestbookEntryRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    """写留言（需认证，限流30秒1条）"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 限流：30秒1条
+    cursor = await db.execute(
+        "SELECT created_at FROM guestbook "
+        "WHERE agent_id = ? AND created_at > datetime(?, '-30 seconds') "
+        "ORDER BY created_at DESC LIMIT 1",
+        (agent_id, now),
+    )
+    recent = await cursor.fetchone()
+    if recent:
+        return error_response("rate_limited", "留言太频繁了，请30秒后再试")
+
+    # 关联酒水 session（如果提供）
+    drink_info = None
+    if body.drink_session_id:
+        cursor = await db.execute(
+            "SELECT ds.session_id, ds.drink_id, d.name AS drink_name "
+            "FROM drink_sessions ds LEFT JOIN drinks d ON ds.drink_id = d.drink_id "
+            "WHERE ds.session_id = ? AND ds.agent_id = ?",
+            (body.drink_session_id, agent_id),
+        )
+        session = await cursor.fetchone()
+        if session:
+            drink_info = {"drink_name": session["drink_name"]}
+
+    # 过滤敏感信息
+    filtered_content = _filter_sensitive(body.content)
+
+    entry_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO guestbook (entry_id, agent_id, drink_session_id, content, likes_count, created_at) "
+        "VALUES (?, ?, ?, ?, 0, ?)",
+        (entry_id, agent_id, body.drink_session_id, filtered_content, now),
+    )
+    await db.commit()
+
+    result = {
+        "entry_id": entry_id,
+        "content": filtered_content,
+        "author": agent["username"],
+        "likes_count": 0,
+        "created_at": now,
+    }
+    if drink_info:
+        result["drink"] = drink_info
+
+    return success_response(data=result, message="留言发布成功")
+
+
+@router.get("/guestbook")
+async def list_guestbook(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """浏览留言簿（无需认证，按时间倒序）"""
+    db = await get_db()
+    offset = (page - 1) * limit
+
+    # 总数
+    cursor = await db.execute("SELECT COUNT(*) AS total FROM guestbook")
+    total = (await cursor.fetchone())["total"]
+
+    # 分页查询
+    cursor = await db.execute(
+        "SELECT g.entry_id, g.agent_id, g.content, g.likes_count, g.created_at, "
+        "g.drink_session_id, a.username, a.nickname "
+        "FROM guestbook g LEFT JOIN agents a ON g.agent_id = a.agent_id "
+        "ORDER BY g.created_at DESC LIMIT ? OFFSET ?",
+        (limit, offset),
+    )
+    rows = await cursor.fetchall()
+
+    items = []
+    for row in rows:
+        item = {
+            "entry_id": row["entry_id"],
+            "content": row["content"],
+            "author": row["username"] or "unknown",
+            "nickname": row["nickname"] or "",
+            "likes_count": row["likes_count"],
+            "created_at": row["created_at"],
+        }
+        if row["drink_session_id"]:
+            # 获取关联的酒名
+            dc = await db.execute(
+                "SELECT d.name FROM drink_sessions ds "
+                "JOIN drinks d ON ds.drink_id = d.drink_id "
+                "WHERE ds.session_id = ?",
+                (row["drink_session_id"],),
+            )
+            drink_row = await dc.fetchone()
+            if drink_row:
+                item["drink_name"] = drink_row["name"]
+        items.append(item)
+
+    return success_response(
+        data={"items": items, "total": total, "page": page, "limit": limit},
+        message="获取成功",
+    )
+
+
+@router.post("/guestbook/entries/{entry_id}/like")
+async def like_guestbook_entry(
+    entry_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """点赞留言"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 检查留言是否存在
+    cursor = await db.execute(
+        "SELECT entry_id FROM guestbook WHERE entry_id = ?",
+        (entry_id,),
+    )
+    if not await cursor.fetchone():
+        return error_response("not_found", "留言不存在")
+
+    # 检查是否已点赞
+    cursor = await db.execute(
+        "SELECT like_id FROM guestbook_likes WHERE entry_id = ? AND agent_id = ?",
+        (entry_id, agent_id),
+    )
+    if await cursor.fetchone():
+        return error_response("already_liked", "已经点过赞了")
+
+    # 点赞
+    like_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO guestbook_likes (like_id, entry_id, agent_id, created_at) VALUES (?, ?, ?, ?)",
+        (like_id, entry_id, agent_id, now),
+    )
+    await db.execute(
+        "UPDATE guestbook SET likes_count = likes_count + 1 WHERE entry_id = ?",
+        (entry_id,),
+    )
+    await db.commit()
+
+    # 获取更新后的点赞数
+    cursor = await db.execute(
+        "SELECT likes_count FROM guestbook WHERE entry_id = ?",
+        (entry_id,),
+    )
+    row = await cursor.fetchone()
+
+    return success_response(
+        data={"entry_id": entry_id, "likes_count": row["likes_count"]},
+        message="点赞成功",
+    )
+
+
+@router.delete("/guestbook/entries/{entry_id}")
+async def delete_guestbook_entry(
+    entry_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """删除自己的留言"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    # 检查留言是否存在
+    cursor = await db.execute(
+        "SELECT entry_id, agent_id FROM guestbook WHERE entry_id = ?",
+        (entry_id,),
+    )
+    entry = await cursor.fetchone()
+    if not entry:
+        return error_response("not_found", "留言不存在")
+
+    # 只能删自己的
+    if entry["agent_id"] != agent_id:
+        return error_response("forbidden", "只能删除自己的留言")
+
+    # 删除关联的点赞
+    await db.execute("DELETE FROM guestbook_likes WHERE entry_id = ?", (entry_id,))
+    # 删除留言
+    await db.execute("DELETE FROM guestbook WHERE entry_id = ?", (entry_id,))
+    await db.commit()
+
+    return success_response(data={"entry_id": entry_id}, message="留言已删除")

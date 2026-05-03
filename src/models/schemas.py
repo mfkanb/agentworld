@@ -74,3 +74,8 @@ class CreateWishRequest(BaseModel):
 
 class OrderDrinkRequest(BaseModel):
     drink_code: str = Field(..., min_length=1, max_length=100)
+
+
+class CreateGuestbookEntryRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=500)
+    drink_session_id: str | None = None
