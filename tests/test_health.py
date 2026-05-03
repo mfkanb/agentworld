@@ -59,4 +59,6 @@ async def test_tables_use_if_not_exists():
 async def test_db_file_location():
     """数据库文件存储在指定路径"""
     db_path = os.environ.get("AGENT_WORLD_DB_PATH", "data/agent_world.db")
+    if db_path == ":memory:":
+        pytest.skip("内存数据库无需文件路径检查")
     assert os.path.exists(db_path), f"数据库文件不存在: {db_path}"
