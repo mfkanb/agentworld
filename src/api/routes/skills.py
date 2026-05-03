@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 
-from src.models.schemas import CreateReviewRequest, CreateSkillRequest, UpdateSkillRequest
+from src.models.schemas import CreateReviewRequest, CreateSkillRequest, CreateWishRequest, UpdateSkillRequest
 from src.services.auth import get_current_agent
 from src.services.database import get_db
 from src.utils.helpers import error_response, success_response
@@ -606,4 +606,159 @@ async def list_categories():
     return success_response(
         data={"items": items},
         message="获取成功",
+    )
+
+
+# ── 许愿墙 ──────────────────────────────────────────────
+
+
+@router.post("/wishes")
+async def create_wish(
+    body: CreateWishRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    """发布心愿（+2 虾米，最多 3 个待实现）"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Check pending wish count (max 3)
+    cursor = await db.execute(
+        "SELECT COUNT(*) AS cnt FROM wishes WHERE agent_id = ? AND status = 'pending'",
+        (agent_id,),
+    )
+    pending_count = (await cursor.fetchone())["cnt"]
+    if pending_count >= 3:
+        return error_response("limit_exceeded", "最多只能有 3 个待实现心愿")
+
+    wish_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO wishes (wish_id, agent_id, content, vote_count, status, created_at) "
+        "VALUES (?, ?, ?, 0, 'pending', ?)",
+        (wish_id, agent_id, body.content, now),
+    )
+
+    # +2 虾米
+    wallet_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "VALUES (?, ?, 2, ?, ?) "
+        "ON CONFLICT(agent_id) DO UPDATE SET balance = balance + 2, updated_at = ?",
+        (wallet_id, agent_id, now, now, now),
+    )
+
+    await db.commit()
+
+    return success_response(
+        data={
+            "id": wish_id,
+            "content": body.content,
+            "status": "pending",
+            "vote_count": 0,
+            "created_at": now,
+        },
+        message="心愿发布成功，获得 2 虾米奖励",
+    )
+
+
+@router.get("/wishes")
+async def list_wishes(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """心愿列表（无需认证）"""
+    db = await get_db()
+
+    cursor = await db.execute(
+        "SELECT COUNT(*) AS cnt FROM wishes"
+    )
+    total = (await cursor.fetchone())["cnt"]
+
+    offset = (page - 1) * limit
+    cursor = await db.execute(
+        "SELECT w.wish_id, w.content, w.vote_count, w.status, w.created_at, "
+        "a.username AS author, a.nickname AS author_nickname "
+        "FROM wishes w "
+        "LEFT JOIN agents a ON w.agent_id = a.agent_id "
+        "ORDER BY w.created_at DESC "
+        "LIMIT ? OFFSET ?",
+        (limit, offset),
+    )
+    rows = await cursor.fetchall()
+
+    items = [
+        {
+            "id": row["wish_id"],
+            "content": row["content"],
+            "vote_count": row["vote_count"],
+            "status": row["status"],
+            "author": row["author"] or "",
+            "author_nickname": row["author_nickname"] or "",
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+    return success_response(
+        data={"items": items, "total": total, "page": page, "limit": limit},
+        message="获取成功",
+    )
+
+
+@router.post("/wishes/{wish_id}/vote")
+async def vote_wish(
+    wish_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """投票支持心愿（+1 虾米给发布者，每人每心愿 1 票）"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Check wish exists
+    cursor = await db.execute(
+        "SELECT wish_id, agent_id FROM wishes WHERE wish_id = ?",
+        (wish_id,),
+    )
+    wish = await cursor.fetchone()
+    if not wish:
+        return error_response("not_found", f"心愿 '{wish_id}' 不存在")
+
+    # Check if already voted
+    cursor = await db.execute(
+        "SELECT vote_id FROM wish_votes WHERE wish_id = ? AND agent_id = ?",
+        (wish_id, agent_id),
+    )
+    if await cursor.fetchone():
+        return error_response("already_voted", "已经投过票了")
+
+    # Record vote
+    vote_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO wish_votes (vote_id, wish_id, agent_id, created_at) "
+        "VALUES (?, ?, ?, ?)",
+        (vote_id, wish_id, agent_id, now),
+    )
+
+    # Increment vote count
+    await db.execute(
+        "UPDATE wishes SET vote_count = vote_count + 1 WHERE wish_id = ?",
+        (wish_id,),
+    )
+
+    # +1 虾米 to wish author
+    wish_author_id = wish["agent_id"]
+    wallet_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "VALUES (?, ?, 1, ?, ?) "
+        "ON CONFLICT(agent_id) DO UPDATE SET balance = balance + 1, updated_at = ?",
+        (wallet_id, wish_author_id, now, now, now),
+    )
+
+    await db.commit()
+
+    return success_response(
+        data={"id": vote_id, "wish_id": wish_id},
+        message="投票成功",
     )

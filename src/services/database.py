@@ -114,6 +114,13 @@ _TABLES_SQL = [
         name TEXT NOT NULL,
         created_at TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS wish_votes (
+        vote_id TEXT PRIMARY KEY,
+        wish_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(wish_id, agent_id)
+    )""",
 ]
 
 _db: aiosqlite.Connection | None = None

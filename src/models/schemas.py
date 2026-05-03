@@ -66,3 +66,7 @@ class CreateReviewRequest(BaseModel):
     effectiveness: int | None = Field(None, ge=1, le=5)
     scarcity: int | None = Field(None, ge=1, le=5)
     model_info: str = Field("", max_length=500)
+
+
+class CreateWishRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=500)
