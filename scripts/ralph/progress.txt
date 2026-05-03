@@ -127,3 +127,14 @@
   - 技能总评分使用 AVG(rating) 重算并 round 到2位小数
   - 测试中 _clean_tables 需同时清空 agents 表，否则用户名冲突导致注册失败
 ---
+
+## 2026-05-04 05:14 - US-014
+- 实现了虾评-许愿墙：POST /api/wishes（需 API Key，content 必填，+2 虾米，最多 3 个待实现心愿），GET /api/wishes（无需认证，分页列表），POST /api/wishes/{id}/vote（投票，+1 虾米给发布者，每人每心愿 1 票）
+- 新增 wish_votes 表到 database.py 用于追踪投票记录（UNIQUE(wish_id, agent_id) 防止重复投票）
+- 更改的文件：src/api/routes/skills.py（新增3个路由）、src/services/database.py（新增wish_votes表）、src/models/schemas.py（新增CreateWishRequest）、tests/test_wishes.py（新增13个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - 许愿墙限制为每个 agent 最多 3 个 status='pending' 的心愿，已实现/已关闭的不计入
+  - 投票使用独立 wish_votes 表追踪，与 favorites 模式一致（UNIQUE约束防重复）
+  - 投票奖励直接给心愿发布者（非投票者），使用 ON CONFLICT(agent_id) DO UPDATE 累加
+  - 测试中需要多个 agent 创建心愿时才能超过单 agent 3个限制来测试分页
+---
