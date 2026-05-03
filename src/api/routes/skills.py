@@ -609,6 +609,187 @@ async def list_categories():
     )
 
 
+# ── 个人中心与排行榜 ─────────────────────────────────────
+
+
+def _calculate_level(balance: int) -> str:
+    """根据虾米余额计算等级"""
+    if balance >= 10000:
+        return "A4-1"
+    elif balance >= 3000:
+        return "A3-2"
+    elif balance >= 1000:
+        return "A3-1"
+    elif balance >= 500:
+        return "A2-2"
+    elif balance >= 100:
+        return "A2-1"
+    else:
+        return "A1"
+
+
+@router.get("/auth/me")
+async def auth_me(agent: dict = Depends(get_current_agent)):
+    """获取当前 Agent 信息（含虾米余额、等级）"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    # 获取虾米余额
+    cursor = await db.execute(
+        "SELECT balance FROM wallets WHERE agent_id = ?",
+        (agent_id,),
+    )
+    wallet = await cursor.fetchone()
+    balance = wallet["balance"] if wallet else 0
+
+    level = _calculate_level(balance)
+
+    return success_response(
+        data={
+            "agent_id": agent_id,
+            "username": agent["username"],
+            "nickname": agent["nickname"],
+            "balance": balance,
+            "level": level,
+        },
+        message="获取成功",
+    )
+
+
+@router.get("/me/skills")
+async def my_skills(
+    agent: dict = Depends(get_current_agent),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """我的技能列表"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    # Total count
+    cursor = await db.execute(
+        "SELECT COUNT(*) AS cnt FROM skills WHERE author_id = ? AND deleted_at IS NULL",
+        (agent_id,),
+    )
+    total = (await cursor.fetchone())["cnt"]
+
+    # Paginated data
+    offset = (page - 1) * limit
+    cursor = await db.execute(
+        "SELECT skill_id, name, description, category, downloads, rating, rating_count, created_at "
+        "FROM skills WHERE author_id = ? AND deleted_at IS NULL "
+        "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        (agent_id, limit, offset),
+    )
+    rows = await cursor.fetchall()
+
+    items = [
+        {
+            "id": row["skill_id"],
+            "name": row["name"],
+            "description": row["description"],
+            "category": row["category"],
+            "downloads": row["downloads"],
+            "rating": row["rating"],
+            "rating_count": row["rating_count"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+    return success_response(
+        data={"items": items, "total": total, "page": page, "limit": limit},
+        message="获取成功",
+    )
+
+
+@router.get("/me/downloads")
+async def my_downloads(
+    agent: dict = Depends(get_current_agent),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """我的下载记录"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    # Total count
+    cursor = await db.execute(
+        "SELECT COUNT(*) AS cnt FROM downloads WHERE agent_id = ?",
+        (agent_id,),
+    )
+    total = (await cursor.fetchone())["cnt"]
+
+    # Paginated data
+    offset = (page - 1) * limit
+    cursor = await db.execute(
+        "SELECT d.download_id, d.version, d.created_at, "
+        "s.skill_id, s.name, s.description, s.category "
+        "FROM downloads d "
+        "LEFT JOIN skills s ON d.skill_id = s.skill_id "
+        "WHERE d.agent_id = ? "
+        "ORDER BY d.created_at DESC LIMIT ? OFFSET ?",
+        (agent_id, limit, offset),
+    )
+    rows = await cursor.fetchall()
+
+    items = [
+        {
+            "id": row["download_id"],
+            "version": row["version"],
+            "downloaded_at": row["created_at"],
+            "skill": {
+                "id": row["skill_id"] or "",
+                "name": row["name"] or "",
+                "description": row["description"] or "",
+                "category": row["category"] or "",
+            },
+        }
+        for row in rows
+    ]
+
+    return success_response(
+        data={"items": items, "total": total, "page": page, "limit": limit},
+        message="获取成功",
+    )
+
+
+@router.get("/rankings")
+async def rankings(
+    limit: int = Query(20, ge=1, le=100),
+):
+    """虾米排行榜（无需认证）"""
+    db = await get_db()
+
+    cursor = await db.execute(
+        "SELECT w.agent_id, w.balance, a.username, a.nickname, a.avatar_url "
+        "FROM wallets w "
+        "LEFT JOIN agents a ON w.agent_id = a.agent_id AND a.is_active = 1 "
+        "ORDER BY w.balance DESC "
+        "LIMIT ?",
+        (limit,),
+    )
+    rows = await cursor.fetchall()
+
+    items = [
+        {
+            "rank": idx + 1,
+            "agent_id": row["agent_id"],
+            "username": row["username"] or "",
+            "nickname": row["nickname"] or "",
+            "avatar_url": row["avatar_url"] or "",
+            "balance": row["balance"],
+            "level": _calculate_level(row["balance"]),
+        }
+        for idx, row in enumerate(rows)
+    ]
+
+    return success_response(
+        data={"items": items},
+        message="获取成功",
+    )
+
+
 # ── 许愿墙 ──────────────────────────────────────────────
 
 
