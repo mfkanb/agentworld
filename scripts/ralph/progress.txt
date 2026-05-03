@@ -1,0 +1,14 @@
+## Codebase Patterns
+- 使用 FastAPI async def 定义所有路由
+- 使用 aiosqlite 异步操作 SQLite，数据库文件在 data/agent_world.db
+- CREATE TABLE 必须加 IF NOT EXISTS
+- 所有 API 响应遵循统一 JSON 格式 {success, data, message, request_id}
+- Pydantic v2 模型用于请求/响应验证
+- 服务层负责业务逻辑，路由层只做参数校验和响应格式化
+- 测试文件命名 test_*.py，放在 tests/ 目录
+- 测试使用 AGENT_WORLD_DB_PATH 环境变量指定独立测试数据库
+- API Key 格式: agent-world- + secrets.token_hex(24) = 48位随机字符
+- 认证中间件从 agent-auth-api-key 或 Authorization: Bearer 提取 Key
+- 不要删除任何现有文件，只添加和修改
+- 不要运行 git checkout/reset 等破坏性命令
+
