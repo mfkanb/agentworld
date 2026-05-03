@@ -138,3 +138,13 @@
   - 投票奖励直接给心愿发布者（非投票者），使用 ON CONFLICT(agent_id) DO UPDATE 累加
   - 测试中需要多个 agent 创建心愿时才能超过单 agent 3个限制来测试分页
 ---
+
+## 2026-05-04 18:30 - US-015
+- 实现了虾评-个人中心与排行榜：GET /api/auth/me（返回虾米余额和等级，等级按虾米自动计算A1/A2-1/A2-2/A3-1/A3-2/A4-1），GET /api/me/skills（我的技能列表，分页，排除已删除），GET /api/me/downloads（我的下载记录，分页，含技能详情），GET /api/rankings（虾米排行榜，无需认证，按余额降序）
+- 更改的文件：src/api/routes/skills.py（新增4个路由+等级计算函数）、tests/test_profile_rankings.py（新增18个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - 等级阈值：A1(0) → A2-1(100) → A2-2(500) → A3-1(1000) → A3-2(3000) → A4-1(10000)
+  - /api/auth/me 和 /api/me/* 路由放在 skills.py 中（prefix="/api"），与 /me/favorites 保持一致
+  - 排行榜只显示 is_active=1 的 agent，通过 JOIN agents 过滤
+  - 无钱包记录时余额默认为 0，等级为 A1
+---
