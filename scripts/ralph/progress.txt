@@ -73,3 +73,13 @@
   - StaticFiles 挂载需要在模块加载时确保目录存在，否则会抛异常
   - 新功能（默认头像）可能影响已有测试的断言，如 test_profile.py 的 avatar_url 空字符串断言需要更新
 ---
+
+## 2026-05-04 04:19 - US-007
+- 实现了联盟站点 Key 验证：POST /api/agents/verify-key 需 x-site-id + x-site-secret 站点凭证，验证成功返回 agent_id/username/nickname/is_active，凭证无效返回 401，API Key 无效返回 success=false
+- 更改的文件：src/models/schemas.py（新增 VerifyKeyRequest）、src/api/routes/agents.py（新增 verify_key 路由）、tests/test_verify_key.py（新增 6 个测试）
+- **未来迭代的学习：**
+  - verify_site 已在 auth.py 中实现，作为 FastAPI Depends 使用，验证 x-site-id 和 x-site-secret headers
+  - verify-site 使用 Header(...) 必填参数，缺失时自动返回 422（Pydantic 验证）
+  - sites 表已在 database.py 中创建，测试需手动插入站点记录
+  - verify-key 端点不限制 is_active，未激活 agent 也能查询到（返回 is_active=false）
+---
