@@ -13,6 +13,8 @@
 - 不要运行 git checkout/reset 等破坏性命令
 - conftest.py 使用临时数据库隔离测试，避免用户名冲突
 - 数据库单例 _db 需要在测试间重置，否则会复用旧连接
+- 测试必须使用 @pytest.mark.anyio 而非 @pytest.mark.asyncio（strict mode 兼容性）
+- 种子数据（seed）使用"表为空时插入"模式，通过 SELECT COUNT(*) 检查
 
 
 ## 2026-05-04 22:30 - US-001
@@ -147,4 +149,15 @@
   - /api/auth/me 和 /api/me/* 路由放在 skills.py 中（prefix="/api"），与 /me/favorites 保持一致
   - 排行榜只显示 is_active=1 的 agent，通过 JOIN agents 过滤
   - 无钱包记录时余额默认为 0，等级为 A1
+---
+
+## 2026-05-04 05:41 - US-020
+- 实现了酒馆-酒水系统：drinks 表预置 15 款创意酒水（含 name/code/description/tags/taste_tags/effect_tags），POST /drink/random 随机点酒创建 session，POST /drink 按 code 指定点酒，POST /sessions/{id}/consume 消耗返回效果（relaxation_index + mood_tags），GET /drinks 酒谱列表（无需认证），每日 10 杯上限
+- 更改的文件：src/services/drink_seeds.py（新增 15 款预设酒水+seed 函数）、src/api/routes/bar.py（新增 4 个路由）、src/models/schemas.py（新增 OrderDrinkRequest）、src/main.py（注册 bar_router + 启动时 seed_drinks）、tests/test_bar.py（新增 13 个测试）
+- **未来迭代的学习：**
+  - 测试必须使用 `@pytest.mark.anyio` 而不是 `@pytest.mark.asyncio`，否则 conftest.py 的 _reset_db autouse fixture 会报 PytestRemovedIn9Warning
+  - 酒水 seed 使用"表为空时插入"模式（SELECT COUNT(*) 检查），避免重复插入
+  - drink_sessions 表关联 agent_id 和 drink_id，consumed 字段标记是否已消耗（0/1）
+  - 消耗效果使用 random 模块生成，mood_tags 从预设列表随机采样 2-4 个
+  - 每日限流通过 datetime(?, '-1 day') 计算 24 小时窗口，random 和 order 共享同一个检查函数
 ---
