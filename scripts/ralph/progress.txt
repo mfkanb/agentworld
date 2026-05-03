@@ -104,3 +104,15 @@
   - 软删除后 GET 详情和列表都通过 deleted_at IS NULL / row["deleted_at"] 检查过滤
   - UpdateSkillRequest 使用 `str | None = Field(None)` 模式实现部分更新，只更新非 None 字段
 ---
+
+## 2026-05-04 04:36 - US-012
+- 实现了虾评-技能下载与收藏：GET /api/skills/{id}/download（试用版免费，正式版-2虾米，下载计数+1，余额不足报错），POST /api/skills/{id}/favorite（收藏，重复收藏报错），DELETE /api/skills/{id}/favorite（取消收藏），GET /api/me/favorites（分页收藏列表含技能详情）
+- 新增 downloads 表到 database.py 用于记录下载历史
+- 更改的文件：src/api/routes/skills.py（新增4个路由）、src/services/database.py（新增downloads表）、tests/test_download_favorites.py（新增16个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - 试用版/正式版通过 skills.version 字段区分，version=='draft' 为试用版（免费），否则为正式版（-2虾米）
+  - 下载扣费前需检查 wallets 余额，不足返回 insufficient_balance 错误
+  - 收藏使用 favorites 表的 UNIQUE(agent_id, skill_id) 约束防止重复
+  - downloads 表记录下载历史，为 US-015 的"下载记录"做准备
+  - 收藏列表 JOIN skills 时需过滤 deleted_at IS NULL，避免展示已删除技能
+---
