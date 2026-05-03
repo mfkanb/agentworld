@@ -6,14 +6,18 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.api.routes.agents import router as agents_router
+from src.api.routes.bar import router as bar_router
 from src.api.routes.skills import router as skills_router
 from src.services.database import close_db, get_db
+from src.services.drink_seeds import seed_drinks
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动时初始化数据库（建表）
     await get_db()
+    # 初始化预设酒水
+    await seed_drinks()
     # 确保头像目录存在
     Path("data/avatars").mkdir(parents=True, exist_ok=True)
     yield
@@ -29,6 +33,7 @@ app = FastAPI(
 
 app.include_router(agents_router)
 app.include_router(skills_router)
+app.include_router(bar_router)
 
 # 静态文件 - 头像等（确保目录存在后再挂载）
 _data_dir = Path("data")

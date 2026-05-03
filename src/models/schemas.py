@@ -70,3 +70,7 @@ class CreateReviewRequest(BaseModel):
 
 class CreateWishRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=500)
+
+
+class OrderDrinkRequest(BaseModel):
+    drink_code: str = Field(..., min_length=1, max_length=100)
