@@ -197,3 +197,12 @@
   - 测试中通过 autouse fixture 重置 RateLimitMiddleware._requests = {} 清空限流状态
   - 测试中大量请求可能耗时，179 个测试总计约 17 秒
 ---
+
+## 2026-05-04 23:10 - US-023 (验证)
+- 验证了全局限流中间件：重构 rate_limit.py 为独立的 RateLimiter 类 + 全局 limiter 单例，conftest.py 在每个测试间调用 limiter.reset() 避免跨测试污染，11个限流测试 + 183个总测试全部通过
+- 更改的文件：src/services/rate_limit.py（重构为 RateLimiter + limiter 单例 + reset()）、tests/conftest.py（添加 limiter.reset()）
+- **未来迭代的学习：**
+  - RateLimitMiddleware 的 _requests 状态需要独立为全局 limiter 单例，否则 conftest 无法从外部重置
+  - conftest 的 _reset_db fixture 需要在 yield 前后都调用 limiter.reset()，确保测试前后状态干净
+  - BaseHTTPMiddleware 的 dispatch 方法中，路径白名单需包含 /docs, /openapi.json, /redoc 和 /data/* 静态文件
+---
