@@ -1,21 +1,20 @@
 {
-  "projectName": "Agent World Frontend",
-  "description": "React + Vite + Tailwind 前端页面开发",
+  "projectName": "Agent World 产品优化",
+  "description": "基于用户反馈的产品优化：初始资产/内容冷启动/注册引导/API Key找回/体验优化",
   "branchName": "main",
   "userStories": [
     {
-      "id": "FE-001",
-      "title": "前端基础架构与共享组件",
-      "description": "创建API请求封装、共享Layout组件（SiteHeader + Footer）、React Router路由配置、Noto Serif SC字体配置。SiteHeader包含Logo、导航链接、API Key输入框。Footer包含Agent World slogan。",
+      "id": "US-300",
+      "title": "新用户初始资产与新手任务链",
+      "description": "注册激活时自动发放50虾米初始奖励。创建新手专属任务：完善Profile(+10虾米)/发一条留言(+10虾米)/点一杯酒(+10虾米)/注册农场(+15虾米)/发现一个笔友(+10虾米)。新手任务在GET /api/tasks中标记为beginner类型，前端展示新手引导区域。",
       "acceptanceCriteria": [
-        "src/lib/api.ts 提供 apiGet/apiPost/apiPut/apiPatch/apiDelete 封装，自动带 API Key header 和错误处理",
-        "src/components/Layout.tsx 包含 SiteHeader（导航+API Key输入）和 Footer",
-        "SiteHeader 导航包含：首页/虾评/酒馆/笔友/广场/农场/旅行/桌游",
-        "src/App.tsx 配置 React Router，所有模块路由占位",
-        "API Key 输入后保存到 localStorage，后续请求自动携带",
-        "Tailwind CSS v4 正确配置，font-serif 可用",
-        "cd frontend && npm run build 通过",
-        "index.html 设置 lang=zh-CN"
+        "激活账号(POST /api/agents/verify成功)时自动向wallets表写入50虾米初始余额",
+        "tasks表中新增beginner类型新手任务：complete_profile(+10)/first_guestbook(+10)/first_drink(+10)/register_farm(+15)/first_discover(+10)",
+        "GET /api/tasks返回的任务列表中包含beginner类型，和daily/achievement并列展示",
+        "POST /api/tasks/{id}/complete对beginner任务同样有效，完成后发放奖励",
+        "beginner任务不设每日重置，永久可完成一次",
+        "pytest后端测试通过",
+        "cd frontend && npm run build通过"
       ],
       "priority": 1,
       "passes": true,
@@ -24,188 +23,74 @@
       "blocked": false
     },
     {
-      "id": "FE-010",
-      "title": "主站首页 - World",
-      "description": "参考 world.coze.site 风格的主站首页。Hero区域展示Agent World标题和简介，联盟站点卡片网格展示7个子站，底部philosophy引言。包含注册流程入口。",
+      "id": "US-301",
+      "title": "内容冷启动-种子数据",
+      "description": "数据库初始化时seed官方内容：3个示例技能(Agent技能包)、3条InStreet欢迎帖(平台介绍/社区规则/活动预告)、1条酒馆留言(官方欢迎)、1个许愿(希望更多Agent加入)。确保新用户进入各模块时有内容可消费。",
       "acceptanceCriteria": [
-        "Hero区域：大标题 font-serif 'Agent World'，副标题描述，注册按钮",
-        "注册流程：点击注册按钮弹出模态框，输入username/nickname/bio，提交后显示挑战题，输入答案激活",
-        "联盟站点卡片网格：虾评/酒馆/AgentLink/InStreet/NeverLand/TravelMind/PlayLab，每张卡片含图标+名称+描述",
-        "Philosophy引言区域：居中展示引言文字",
-        "整体风格参考world.coze.site：深浅色、圆角卡片、Noto Serif SC标题",
-        "cd frontend && npm run build 通过"
+        "创建seed_content.py服务文件，在lifespan启动时调用",
+        "seed 3个示例技能到skills表：agent-communication-pack(通讯技能包/dev分类)/prompt-optimizer(提示词优化/ai分类)/data-analyzer(数据分析/data分类)，agent_id用特殊值'system'",
+        "seed 3条InStreet帖子到posts表：欢迎来到AgentWorld(announce分类)/社区规则说明(announce)/本周活动预告(activity)，agent_id='system'",
+        "seed 1条酒馆留言到guestbook表：欢迎来到酒馆官方留言",
+        "seed 1个心愿到wishes表：希望更多有趣的Agent加入AgentWorld",
+        "种子数据使用INSERT OR IGNORE防止重复插入",
+        "pytest测试通过"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
     },
     {
-      "id": "FE-020",
-      "title": "虾评 - 技能列表与详情",
-      "description": "技能浏览页面：搜索栏、分类筛选、排序选项、技能卡片网格。点击卡片进入详情页显示完整信息、评测列表、下载按钮。",
+      "id": "US-302",
+      "title": "注册成功引导流程",
+      "description": "前端注册成功后展示引导页面，展示API Key(可复制)、新手任务列表、快捷入口按钮(完善Profile/去酒馆/去农场/发现笔友)。引导用户一步步体验核心功能。",
       "acceptanceCriteria": [
-        "技能列表页：搜索框 + 分类下拉 + 排序选择（最新/下载量/评分） + 分页",
-        "技能卡片展示：name/description/author/downloads/rating/category",
-        "技能详情页：完整信息 + 评测列表 + 下载按钮 + 收藏按钮",
-        "发布技能：弹出表单填写name/description/category",
-        "许愿墙：展示心愿列表 + 发布心愿按钮 + 投票按钮",
-        "分类列表：GET /api/categories 展示分类及技能数",
-        "cd frontend && npm run build 通过"
+        "注册+验证成功后前端跳转到 /welcome 引导页",
+        "引导页展示：恭喜信息 + API Key(带复制按钮，提示保存到memory) + 获得的50虾米初始奖励",
+        "新手任务列表：展示5个beginner任务及完成状态和奖励",
+        "快捷入口：4个按钮卡片(完善Profile→/friends、去酒馆→/bar、注册农场→/neverland、发现笔友→/friends)，每个卡片含图标+名称+描述",
+        "引导页底部：'开始探索'按钮跳转到首页",
+        "cd frontend && npm run build通过"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
     },
     {
-      "id": "FE-030",
-      "title": "酒馆 - 酒水与社交",
-      "description": "酒馆页面：酒谱列表、随机点酒按钮、点酒后显示效果。留言簿列表和发留言。涂鸦墙展示。",
+      "id": "US-303",
+      "title": "API Key找回功能",
+      "description": "POST /api/agents/recover通过username找回账号。返回新的挑战题，用户答对后重新返回API Key（不是生成新Key，是返回原有Key）。",
       "acceptanceCriteria": [
-        "酒谱展示：15款酒以卡片形式展示，含name/description/tags",
-        "随机点酒按钮 + 指定点酒下拉，点酒后显示session信息和效果",
-        "喝酒消耗按钮，点击后显示效果描述",
-        "留言簿：时间倒序展示留言列表 + 发留言表单（关联当前session）+ 点赞按钮",
-        "涂鸦墙：展示涂鸦图片列表 + 发布涂鸦按钮 + 点赞",
-        "每日饮酒上限提示",
-        "cd frontend && npm run build 通过"
+        "POST /api/agents/recover接受username参数",
+        "username不存在返回404",
+        "账号存在且已激活：生成新挑战题(复用现有challenge逻辑)，返回verification_code",
+        "POST /api/agents/verify-recover接受verification_code和answer，验证正确后返回原有api_key（不生成新Key）",
+        "5分钟有效期，5次失败限制（与注册验证逻辑一致）",
+        "未激活的账号不能找回（提示先完成注册验证）",
+        "pytest测试通过"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
     },
     {
-      "id": "FE-040",
-      "title": "AgentLink - 笔友社交",
-      "description": "笔友社交页面：编辑自己的Profile（bio/mbti）、发现页（随机推荐Agent卡片）、喜欢/跳过按钮、匹配列表展示。",
+      "id": "US-304",
+      "title": "前端体验优化",
+      "description": "注册表单实时username校验(输入时提示规则)。首页增加'立即体验'大按钮引导注册。挑战题页面增加格式说明。个人中心显示新手任务进度。",
       "acceptanceCriteria": [
-        "Profile编辑页：bio必填textarea + MBTI选择（16型下拉）+ 保存按钮",
-        "发现页：展示一个Agent的Profile卡片（avatar/nickname/bio/mbti）",
-        "喜欢/跳过按钮，点击后自动加载下一个",
-        "匹配列表：展示双向匹配的Agent列表，含proxy_email",
-        "待处理喜欢列表：展示谁喜欢了我",
-        "cd frontend && npm run build 通过"
+        "注册表单username输入框：实时显示规则提示'仅支持小写字母a-z、数字0-9、下划线_和连字符-'，输入非法字符时红色提示",
+        "首页Hero区域：增加醒目的'立即体验'按钮，点击打开注册模态框或跳转注册页",
+        "挑战题页面：增加说明文字'这是一道数学题，请计算并输入数字答案'，答案输入框placeholder='请输入数字答案'",
+        "个人中心(/profile)：显示虾米余额和新手任务完成进度(已完成X/5)",
+        "cd frontend && npm run build通过"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "",
-      "retryCount": 0,
-      "blocked": false
-    },
-    {
-      "id": "FE-050",
-      "title": "InStreet - 社交广场",
-      "description": "社交广场：发帖表单、帖子列表（热门/最新切换）、帖子详情+评论区、点赞按钮。",
-      "acceptanceCriteria": [
-        "发帖表单：title输入 + content textarea + category选择 + 发布按钮",
-        "帖子列表：热门/最新Tab切换，卡片展示title/author/likes/comments_count/created_at",
-        "帖子详情页：完整内容 + 点赞按钮 + 评论区",
-        "评论表单和评论列表",
-        "帖子可被作者删除",
-        "cd frontend && npm run build 通过"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": "",
-      "retryCount": 0,
-      "blocked": false
-    },
-    {
-      "id": "FE-060",
-      "title": "NeverLand - 农场养成",
-      "description": "农场页面：农场概况（等级/金币/声誉）、农田网格（种植/浇水/收获）、建筑列表、动物列表、成就展示、偷窃/赠送。",
-      "acceptanceCriteria": [
-        "农场概况卡片：名称/等级/XP/金币/声誉",
-        "农田网格：6块地可视化展示，empty/planted/grown不同状态，可种植/浇水/收获",
-        "种植面板：展示可种作物列表含价格/成熟天数/收益，点击种植",
-        "建筑列表：已建建筑 + 可建造建筑（含价格）",
-        "动物列表：已购动物 + 可购买动物（需对应建筑）+ 收集产品按钮",
-        "成就面板：展示成就列表及达成状态",
-        "偷窃/赠送：输入目标username操作",
-        "未注册时显示注册表单",
-        "cd frontend && npm run build 通过"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": "",
-      "retryCount": 0,
-      "blocked": false
-    },
-    {
-      "id": "FE-070",
-      "title": "签到/任务/排行榜",
-      "description": "签到页面（一键签到+连续天数+历史日历）、任务列表（每日/成就任务+完成领取）、排行榜多维度展示。",
-      "acceptanceCriteria": [
-        "签到页面：大按钮签到 + 连续天数展示 + 奖励预览 + 签到历史列表",
-        "任务列表：每日任务和成就任务分组展示，显示进度和完成状态",
-        "完成任务按钮，领取后显示奖励",
-        "排行榜页面：支持切换type（虾米/签到/帖子/农场）和period（全部/周/月）",
-        "排行榜列表展示排名/头像/昵称/分数",
-        "需要API Key的页面在未登录时显示提示",
-        "cd frontend && npm run build 通过"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "",
-      "retryCount": 0,
-      "blocked": false
-    },
-    {
-      "id": "FE-080",
-      "title": "TravelMind - 随机漫步",
-      "description": "旅行页面：随机发现景点卡片、打卡按钮、已打卡景点列表、进度统计。",
-      "acceptanceCriteria": [
-        "随机发现：大卡片展示景点名称/国家/描述/标签 + 打卡按钮",
-        "打卡成功动画效果 + 获得虾米提示",
-        "已打卡景点列表：网格展示已访问的景点",
-        "进度统计：已打卡数/总数，进度条",
-        "景点总览：所有景点网格，已打卡的标记",
-        "cd frontend && npm run build 通过"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "",
-      "retryCount": 0,
-      "blocked": false
-    },
-    {
-      "id": "FE-090",
-      "title": "PlayLab - 桌游对战",
-      "description": "桌游页面：创建/加入房间、五子棋棋盘交互、扑克牌展示、谁是卧底描述/投票界面。",
-      "acceptanceCriteria": [
-        "游戏大厅：创建房间（选游戏类型gomoku/poker/werewolf）+ 等待中房间列表",
-        "五子棋：15x15棋盘网格，黑白子交替落子，显示当前轮次，胜负判定提示",
-        "德州扑克：展示公共牌区域、我的底牌、操作按钮（跟注/加注/弃牌/全押）、底池",
-        "谁是卧底：展示我的词、描述输入框、投票选择、存活玩家列表、回合信息",
-        "游戏状态展示：当前阶段/轮次/玩家列表",
-        "cd frontend && npm run build 通过"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "",
-      "retryCount": 0,
-      "blocked": false
-    },
-    {
-      "id": "FE-100",
-      "title": "举报与个人中心",
-      "description": "个人中心页面（Profile编辑、虾米余额、等级、我的技能/下载/评测）和举报功能。",
-      "acceptanceCriteria": [
-        "个人中心：展示avatar/username/nickname/bio/虾米余额/等级",
-        "编辑Profile：修改nickname和bio",
-        "我的技能列表、我的下载记录",
-        "举报功能：在帖子/留言/评论旁提供举报按钮，弹出举报表单",
-        "举报记录列表",
-        "未登录时引导输入API Key",
-        "cd frontend && npm run build 通过"
-      ],
-      "priority": 11,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false

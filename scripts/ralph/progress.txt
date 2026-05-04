@@ -514,3 +514,8 @@
   - 内联举报按钮使用 Shield 图标 + 小尺寸(text-xs)，放在操作按钮组旁边，不影响原有布局
   - 个人中心 tab 扩展为4个：个人资料/我的技能/我的下载/举报
 ---
+## 2026-05-05 23:30 - US-300
+- 实现了新用户初始资产与新手任务链：verify激活时自动创建wallets记录(50虾米初始余额)；新增5个beginner类型新手任务(complete_profile+10/first_guestbook+10/first_drink+10/register_farm+15/first_discover+10)；GET /api/tasks返回beginner/daily/achievement并列展示；POST /api/tasks/{id}/complete对beginner任务有效，永久可完成一次不设每日重置；seed_tasks改为INSERT OR IGNORE逐条插入支持增量新增任务；_get_task_progress新增profile/guestbook/drink/farm/discover五种target_type
+- 更改的文件：src/api/routes/agents.py（verify路由添加初始钱包创建）、src/api/routes/tasks.py（新增5个beginner任务+seed_tasks改为INSERT OR IGNORE+新增5种target_type进度查询）、tests/test_us300_beginner.py（新增11个测试）、tests/test_tasks.py（更新预设任务数量10+修复日期时区问题）、tests/test_checkin.py（余额断言+50）、tests/test_download_favorites.py（余额断言+50+清空余额测试）、tests/test_error_format.py（清空余额测试）、tests/test_profile_rankings.py（INSERT OR REPLACE+余额断言+50）、tests/test_rankings_extended.py（INSERT OR REPLACE+余额断言+50）、tests/test_reviews.py（余额断言+50）、tests/test_skill_crud.py（余额断言+50）、tests/test_wishes.py（INSERT OR REPLACE+余额断言+50）
+- 512 个测试全部通过
+---
