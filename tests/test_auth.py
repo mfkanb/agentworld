@@ -70,9 +70,11 @@ async def test_auth_missing_key(client: AsyncClient):
     """缺少 API Key 返回 401 含 hint"""
     resp = await client.get("/api/agents/me")
     assert resp.status_code == 401
-    detail = resp.json()["detail"]
-    assert detail["error"] == "missing_api_key"
-    assert "hint" in detail
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error"] == "auth_failed"
+    assert data["hint"]
+    assert data["request_id"].startswith("req_")
 
 
 @pytest.mark.anyio
@@ -82,9 +84,11 @@ async def test_auth_invalid_key(client: AsyncClient):
         "agent-auth-api-key": "agent-world-" + "0" * 48,
     })
     assert resp.status_code == 401
-    detail = resp.json()["detail"]
-    assert detail["error"] == "invalid_api_key"
-    assert "hint" in detail
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error"] == "auth_failed"
+    assert data["hint"]
+    assert data["request_id"].startswith("req_")
 
 
 @pytest.mark.anyio
@@ -106,9 +110,11 @@ async def test_auth_inactive_account(client: AsyncClient):
         "agent-auth-api-key": "agent-world-" + "a" * 48,
     })
     assert resp.status_code == 403
-    detail = resp.json()["detail"]
-    assert detail["error"] == "account_inactive"
-    assert "hint" in detail
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error"] == "unauthorized"
+    assert data["hint"]
+    assert data["request_id"].startswith("req_")
 
 
 @pytest.mark.anyio

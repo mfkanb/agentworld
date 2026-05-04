@@ -22,7 +22,7 @@ def error_response(error: str, message: str, hint: str = "") -> dict:
         "success": False,
         "error": error,
         "message": message,
+        "hint": hint,
+        "request_id": f"req_{uuid.uuid4().hex[:12]}",
     }
-    if hint:
-        resp["hint"] = hint
     return resp

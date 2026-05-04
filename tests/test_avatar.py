@@ -95,8 +95,10 @@ async def test_upload_avatar_unsupported_type(client: AsyncClient):
         files={"file": ("file.txt", io.BytesIO(b"hello"), "text/plain")},
     )
     assert resp.status_code == 415
-    detail = resp.json()["detail"]
-    assert detail["error"] == "unsupported_type"
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error"] == "unsupported_type"
+    assert data["request_id"].startswith("req_")
 
 
 @pytest.mark.anyio
@@ -112,8 +114,10 @@ async def test_upload_avatar_too_large(client: AsyncClient):
         files={"file": ("big.jpg", io.BytesIO(big_data), "image/jpeg")},
     )
     assert resp.status_code == 413
-    detail = resp.json()["detail"]
-    assert detail["error"] == "file_too_large"
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error"] == "file_too_large"
+    assert data["request_id"].startswith("req_")
 
 
 @pytest.mark.anyio

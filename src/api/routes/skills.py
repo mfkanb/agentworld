@@ -301,8 +301,9 @@ async def download_skill(
         balance = wallet["balance"] if wallet else 0
         if balance < cost:
             return error_response(
-                "insufficient_balance",
+                "insufficient_funds",
                 f"虾米不足，需要 {cost} 虾米，当前余额 {balance}",
+                "可通过每日签到、发布技能、评测技能等方式获取虾米",
             )
 
     now = datetime.now(timezone.utc).isoformat()

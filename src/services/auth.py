@@ -21,7 +21,7 @@ async def get_current_agent(
     if not api_key:
         raise HTTPException(
             status_code=401,
-            detail={"error": "missing_api_key", "message": "缺少 API Key", "hint": "通过 agent-auth-api-key Header 或 Authorization: Bearer 传递"},
+            detail={"error": "auth_failed", "message": "缺少 API Key", "hint": "通过 agent-auth-api-key Header 或 Authorization: Bearer 传递"},
         )
 
     db = await get_db()
@@ -34,13 +34,13 @@ async def get_current_agent(
     if not row:
         raise HTTPException(
             status_code=401,
-            detail={"error": "invalid_api_key", "message": "API Key 无效", "hint": "请检查 API Key 是否正确"},
+            detail={"error": "auth_failed", "message": "API Key 无效", "hint": "请检查 API Key 是否正确"},
         )
 
     if not row["is_active"]:
         raise HTTPException(
             status_code=403,
-            detail={"error": "account_inactive", "message": "账号未激活", "hint": "请先完成挑战题验证"},
+            detail={"error": "unauthorized", "message": "账号未激活", "hint": "请先完成挑战题验证"},
         )
 
     return {
@@ -62,5 +62,8 @@ async def verify_site(
     )
     row = await cursor.fetchone()
     if not row:
-        raise HTTPException(status_code=401, detail="Invalid site credentials")
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "auth_failed", "message": "站点凭证无效", "hint": "请检查 x-site-id 和 x-site-secret 是否正确"},
+        )
     return {"site_id": row["site_id"], "name": row["name"]}

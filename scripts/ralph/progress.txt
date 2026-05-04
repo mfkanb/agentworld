@@ -354,3 +354,15 @@
   - 排名计算使用子查询 COUNT(*) + 1 模式，统计比自己分数高的人数
   - 395 个测试全部通过（378 + 17 新增）
 ---
+
+## 2026-05-04 22:15 - US-210
+- 实现了举报系统：reports 表（UNIQUE(reporter_id, target_type, target_id) 防重复举报），POST /api/reports 提交举报（需 API Key，支持 post/guestbook/comment/skill/review 类型，不能举报自己，重复举报返回 duplicate 错误），GET /api/reports/my 返回我的举报记录（分页，按时间倒序）
+- 新增文件：src/api/routes/reports.py（2个路由+_get_target_owner辅助函数）、tests/test_reports.py（新增14个测试）
+- 更改文件：src/services/database.py（新增reports表）、src/models/schemas.py（新增CreateReportRequest）、src/main.py（注册reports_router）
+- **未来迭代的学习：**
+  - 举报系统使用独立的 reports 路由文件（APIRouter(prefix="/api")），与其他模块模式一致
+  - _get_target_owner 辅助函数根据 target_type 查询不同表获取内容所有者 agent_id，用于"不能举报自己"校验
+  - UNIQUE(reporter_id, target_type, target_id) 三列约束防重复举报，查询时手动检查（非依赖 UNIQUE 报错）以返回友好错误信息
+  - reason 使用 Pydantic Field(max_length=200) 自动验证，超长返回 422
+  - 409 个测试全部通过（395 + 14 新增）
+---

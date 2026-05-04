@@ -1,5 +1,6 @@
 """全局限流中间件 - 基于 API Key / IP 的请求频率限制"""
 import time
+import uuid
 from collections import defaultdict
 
 from fastapi import Request
@@ -22,18 +23,19 @@ class RateLimiter:
         cutoff = time.time() - WINDOW_SECONDS
         self._requests[key] = [t for t in self._requests[key] if t > cutoff]
 
-    def check(self, key: str, limit: int) -> tuple[bool, int]:
-        """检查是否超限，返回 (is_limited, retry_after)"""
+    def check(self, key: str, limit: int) -> tuple[bool, int, int]:
+        """检查是否超限，返回 (is_limited, retry_after, remaining)"""
         now = time.time()
         self._cleanup(key)
         self._requests[key].append(now)
 
         count = len(self._requests[key])
+        remaining = max(0, limit - count)
         if count > limit:
             oldest = self._requests[key][0]
             retry_after = int(oldest + WINDOW_SECONDS - now) + 1
-            return True, max(retry_after, 1)
-        return False, 0
+            return True, max(retry_after, 1), 0
+        return False, 0, remaining
 
     def reset(self) -> None:
         """重置所有限流状态（测试用）"""
@@ -82,7 +84,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             limit = self.get_limit
 
         client_id = _get_client_id(request)
-        is_limited, retry_after = limiter.check(client_id, limit)
+        is_limited, retry_after, remaining = limiter.check(client_id, limit)
 
         if is_limited:
             return JSONResponse(
@@ -91,6 +93,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "success": False,
                     "error": "rate_limited",
                     "message": f"请求频率过高，{method} 限制为 {limit} 次/分钟",
+                    "hint": f"请 {retry_after} 秒后重试，当前剩余额度: 0/{limit}",
+                    "request_id": f"req_{uuid.uuid4().hex[:12]}",
                 },
                 headers={"Retry-After": str(retry_after)},
             )

@@ -1,9 +1,13 @@
 """Agent World 主站 API - 入口文件"""
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.routes.agents import router as agents_router
 from src.api.routes.bar import router as bar_router
@@ -18,6 +22,10 @@ from src.services.database import close_db, get_db
 from src.services.drink_seeds import seed_drinks
 from src.services.rate_limit import RateLimitMiddleware
 from src.api.routes.tasks import seed_tasks
+
+
+def _make_request_id() -> str:
+    return f"req_{uuid.uuid4().hex[:12]}"
 
 
 @asynccontextmanager
@@ -42,6 +50,76 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+# ── 全局异常处理器：统一错误格式 ──
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """将 HTTPException 转换为统一错误格式"""
+    rid = _make_request_id()
+    detail = exc.detail
+    if isinstance(detail, dict):
+        error_code = detail.get("error", "http_error")
+        message = detail.get("message", str(detail))
+        hint = detail.get("hint", "")
+    else:
+        error_code = "http_error"
+        message = str(detail) if detail else "请求错误"
+        hint = ""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": error_code,
+            "message": message,
+            "hint": hint,
+            "request_id": rid,
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+):
+    """将 Pydantic 验证错误转换为统一格式"""
+    rid = _make_request_id()
+    errors = exc.errors()
+    field_msgs = []
+    for e in errors:
+        loc = ".".join(str(x) for x in e.get("loc", []))
+        msg = e.get("msg", "")
+        field_msgs.append(f"{loc}: {msg}" if loc else msg)
+    message = "; ".join(field_msgs)
+    return JSONResponse(
+        status_code=422,
+        content={
+            "success": False,
+            "error": "validation_error",
+            "message": message,
+            "hint": "请检查请求参数格式和必填字段",
+            "request_id": rid,
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """未捕获异常 → 500，统一格式"""
+    rid = _make_request_id()
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "internal_error",
+            "message": "服务器内部错误",
+            "hint": "请稍后重试，如持续出现请联系管理员",
+            "request_id": rid,
+        },
+    )
+
 
 app.add_middleware(RateLimitMiddleware)
 
