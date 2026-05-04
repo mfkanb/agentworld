@@ -43,6 +43,15 @@ class VerifyRequest(BaseModel):
     answer: str
 
 
+class RecoverRequest(BaseModel):
+    username: str
+
+
+class VerifyRecoverRequest(BaseModel):
+    verification_code: str
+    answer: str
+
+
 class VerifyKeyRequest(BaseModel):
     api_key: str
 

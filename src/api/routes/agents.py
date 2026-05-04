@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 
-from src.models.schemas import RegisterRequest, UpdateProfileRequest, VerifyKeyRequest, VerifyRequest
+from src.models.schemas import RegisterRequest, UpdateProfileRequest, VerifyKeyRequest, VerifyRequest, RecoverRequest, VerifyRecoverRequest
 from src.services.auth import get_current_agent, verify_site
 from src.services.avatar import (
     ALLOWED_TYPES,
@@ -60,6 +60,112 @@ async def register(req: RegisterRequest, request: Request):
         },
         message="注册成功，请解答挑战题完成激活",
     )
+
+
+@router.post("/recover")
+async def recover(req: RecoverRequest, request: Request):
+    """通过 username 找回 API Key，生成新挑战题"""
+    db = await get_db()
+
+    cursor = await db.execute(
+        "SELECT agent_id, is_active FROM agents WHERE username = ?",
+        (req.username,),
+    )
+    row = await cursor.fetchone()
+
+    if not row:
+        return error_response("not_found", f"用户 '{req.username}' 不存在", "请检查 username")
+
+    if not row["is_active"]:
+        return error_response("not_active", "账号未激活", "请先完成注册验证")
+
+    # 生成新挑战题
+    verification_code, challenge_text, answer, expires_at = generate_challenge()
+
+    await db.execute(
+        "UPDATE agents SET verification_code = ?, challenge_answer = ?, "
+        "challenge_expires_at = ?, attempt_count = 0 WHERE agent_id = ?",
+        (verification_code, answer, expires_at, row["agent_id"]),
+    )
+    await db.commit()
+
+    return success_response(
+        data={
+            "verification_code": verification_code,
+            "challenge_text": challenge_text,
+        },
+        message="请解答挑战题完成找回",
+    )
+
+
+@router.post("/verify-recover")
+async def verify_recover(req: VerifyRecoverRequest, request: Request):
+    """验证找回挑战题，返回原有 API Key"""
+    db = await get_db()
+
+    cursor = await db.execute(
+        "SELECT agent_id, challenge_answer, challenge_expires_at, "
+        "attempt_count, is_active, api_key FROM agents "
+        "WHERE verification_code = ?",
+        (req.verification_code,),
+    )
+    row = await cursor.fetchone()
+
+    if not row:
+        return error_response("invalid_code", "验证码无效", "请检查 verification_code")
+
+    if not row["is_active"]:
+        return error_response("not_active", "账号未激活", "请先完成注册验证")
+
+    # 检查有效期
+    expires = datetime.fromisoformat(row["challenge_expires_at"])
+    if datetime.now(timezone.utc) > expires:
+        return error_response(
+            "challenge_expired", "挑战题已过期（5分钟有效期）",
+            "请重新发起找回",
+        )
+
+    # 验证答案
+    try:
+        user_answer = float(req.answer)
+        correct_answer = float(row["challenge_answer"])
+    except (ValueError, TypeError):
+        return error_response("invalid_answer", "答案格式错误，请输入数字")
+
+    if abs(user_answer - correct_answer) < 0.01:
+        # 验证成功，返回原有 API Key（不生成新 Key）
+        await db.execute(
+            "UPDATE agents SET verification_code = '', challenge_answer = '' WHERE agent_id = ?",
+            (row["agent_id"],),
+        )
+        await db.commit()
+        return success_response(
+            data={"api_key": row["api_key"]},
+            message="找回成功",
+        )
+    else:
+        # 答案错误
+        new_count = row["attempt_count"] + 1
+        if new_count >= 5:
+            await db.execute(
+                "UPDATE agents SET verification_code = '', challenge_answer = '', attempt_count = 0 WHERE agent_id = ?",
+                (row["agent_id"],),
+            )
+            await db.commit()
+            return error_response(
+                "max_attempts", f"已答错 {new_count} 次，请重新发起找回",
+            )
+        await db.execute(
+            "UPDATE agents SET attempt_count = ? WHERE agent_id = ?",
+            (new_count, row["agent_id"]),
+        )
+        await db.commit()
+        remaining = 5 - new_count
+        return error_response(
+            "wrong_answer",
+            f"答案错误，剩余 {remaining} 次机会",
+            f"还剩 {remaining} 次尝试",
+        )
 
 
 @router.post("/verify")
