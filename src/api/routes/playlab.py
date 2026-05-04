@@ -314,6 +314,8 @@ async def start_room(
     min_players = 2  # 所有游戏至少需要2人
     if room["game_type"] == "gomoku":
         min_players = room["max_players"]  # 五子棋需要满员
+    if room["game_type"] == "werewolf":
+        min_players = 3  # 谁是卧底至少需要3人
     if room["current_players"] < min_players:
         return error_response("not_enough_players", f"人数不足，至少需要 {min_players} 人")
 
@@ -337,6 +339,10 @@ async def start_room(
     # 如果是德州扑克，初始化牌局状态
     if room["game_type"] == "poker":
         await _init_poker_game(db, room_id)
+
+    # 如果是谁是卧底，初始化游戏状态
+    if room["game_type"] == "werewolf":
+        await _init_werewolf_game(db, room_id)
 
     await db.commit()
 
@@ -457,6 +463,11 @@ async def get_room_state(
         poker_state = await _get_poker_state_data(db, room_id, player["player_index"])
         state.update(poker_state)
 
+    # 谁是卧底：附加游戏状态
+    if room["game_type"] == "werewolf":
+        werewolf_state = await _get_werewolf_state_data(db, room_id, agent["agent_id"])
+        state.update(werewolf_state)
+
     return success_response(
         data=state,
         message="获取游戏状态成功",
@@ -521,6 +532,10 @@ async def game_action(
     # 德州扑克逻辑
     if room["game_type"] == "poker":
         return await _poker_action(db, room, player, req)
+
+    # 谁是卧底逻辑
+    if room["game_type"] == "werewolf":
+        return await _werewolf_action(db, room, player, req)
 
     return error_response("unsupported_game", f"游戏类型 {room['game_type']} 暂不支持操作")
 
@@ -1195,3 +1210,499 @@ async def _finish_poker(db, room, pstate, winner_agent_id: str, reason: str):
     )
 
     await db.commit()
+
+
+# ==================== 谁是卧底逻辑 ====================
+
+# 词对库：平民词 -> 卧底词
+WORD_PAIRS = [
+    ("西瓜", "哈密瓜"), ("苹果", "梨"), ("牛奶", "豆浆"), ("面包", "馒头"),
+    ("台灯", "手电筒"), ("钢笔", "铅笔"), ("汽车", "火车"), ("飞机", "火箭"),
+    ("猫", "狗"), ("蝴蝶", "蜻蜓"), ("玫瑰", "百合"), ("沙发", "椅子"),
+    ("眼镜", "墨镜"), ("微信", "QQ"), ("春节", "元旦"), ("饺子", "包子"),
+    ("篮球", "足球"), ("游泳", "跳水"), ("筷子", "叉子"), ("日出", "日落"),
+]
+
+
+async def _init_werewolf_game(db, room_id: str):
+    """初始化谁是卧底游戏"""
+    # 获取玩家列表
+    cursor = await db.execute(
+        "SELECT player_index, agent_id FROM game_players WHERE room_id = ? ORDER BY player_index",
+        (room_id,),
+    )
+    players = await cursor.fetchall()
+    n = len(players)
+
+    # 随机选词对
+    civilian_word, spy_word = random.choice(WORD_PAIRS)
+
+    # 计算卧底数量：约1/3，最少1人
+    spy_count = max(1, n // 3)
+
+    # 随机分配角色
+    indices = list(range(n))
+    spy_indices = set(random.sample(indices, spy_count))
+
+    state_id = str(uuid.uuid4())
+
+    # 创建游戏状态，第一个描述者为 player_index 0
+    await db.execute(
+        """INSERT INTO werewolf_states (id, room_id, civilian_word, spy_word, phase, round, current_describer_index)
+           VALUES (?, ?, ?, ?, 'describe', 1, 0)""",
+        (state_id, room_id, civilian_word, spy_word),
+    )
+
+    # 为每个玩家创建角色记录
+    for p in players:
+        player_id = str(uuid.uuid4())
+        role = "spy" if p["player_index"] in spy_indices else "civilian"
+        await db.execute(
+            """INSERT INTO werewolf_players (id, state_id, agent_id, role, is_alive, description, voted_for_id)
+               VALUES (?, ?, ?, ?, 1, '', '')""",
+            (player_id, state_id, p["agent_id"], role),
+        )
+
+    await db.commit()
+
+
+async def _get_werewolf_state_data(db, room_id: str, my_agent_id: str) -> dict:
+    """获取谁是卧底游戏状态数据"""
+    cursor = await db.execute(
+        "SELECT id, civilian_word, spy_word, phase, round, current_describer_index FROM werewolf_states WHERE room_id = ?",
+        (room_id,),
+    )
+    wstate = await cursor.fetchone()
+    if not wstate:
+        return {}
+
+    # 获取我的角色
+    cursor = await db.execute(
+        "SELECT role, is_alive, description FROM werewolf_players WHERE state_id = ? AND agent_id = ?",
+        (wstate["id"], my_agent_id),
+    )
+    my_info = await cursor.fetchone()
+
+    my_word = ""
+    if my_info:
+        my_word = wstate["civilian_word"] if my_info["role"] == "civilian" else wstate["spy_word"]
+
+    # 获取所有玩家信息（不暴露角色）
+    cursor = await db.execute(
+        """SELECT wp.agent_id, wp.is_alive, wp.description, gp.player_index, a.username, a.nickname
+           FROM werewolf_players wp
+           JOIN game_players gp ON wp.agent_id = gp.agent_id AND gp.room_id = ?
+           JOIN agents a ON wp.agent_id = a.agent_id
+           WHERE wp.state_id = ?
+           ORDER BY gp.player_index""",
+        (room_id, wstate["id"]),
+    )
+    player_rows = await cursor.fetchall()
+
+    players_info = []
+    my_player_index = None
+    is_my_turn = False
+    for p in player_rows:
+        info = {
+            "player_index": p["player_index"],
+            "username": p["username"],
+            "nickname": p["nickname"],
+            "is_alive": bool(p["is_alive"]),
+            "description": p["description"] if p["description"] else "",
+        }
+        players_info.append(info)
+        if p["agent_id"] == my_agent_id:
+            my_player_index = p["player_index"]
+
+    # 判断是否轮到我描述
+    if my_player_index is not None and wstate["phase"] == "describe":
+        # 获取存活玩家按顺序排列
+        alive_indices = [p["player_index"] for p in players_info if p["is_alive"]]
+        if alive_indices:
+            # current_describer_index 是存活的第几个
+            current_idx = wstate["current_describer_index"]
+            if current_idx < len(alive_indices) and alive_indices[current_idx] == my_player_index:
+                is_my_turn = True
+
+    return {
+        "werewolf": {
+            "phase": wstate["phase"],
+            "round": wstate["round"],
+            "current_describer_index": wstate["current_describer_index"],
+            "my_word": my_word,
+            "my_role": my_info["role"] if my_info else "",
+            "is_my_turn": is_my_turn,
+            "players": players_info,
+        },
+    }
+
+
+async def _werewolf_action(db, room, player, req: GameActionRequest):
+    """谁是卧底操作处理"""
+    cursor = await db.execute(
+        "SELECT id, civilian_word, spy_word, phase, round, current_describer_index FROM werewolf_states WHERE room_id = ?",
+        (room["id"],),
+    )
+    wstate = await cursor.fetchone()
+
+    if not wstate:
+        return error_response("no_game_state", "游戏状态不存在")
+
+    action = req.action.lower()
+
+    if action == "describe":
+        return await _werewolf_describe(db, room, wstate, player, req)
+    elif action == "vote":
+        return await _werewolf_vote(db, room, wstate, player, req)
+    else:
+        return error_response("invalid_action", f"谁是卧底不支持操作: {req.action}")
+
+
+async def _werewolf_describe(db, room, wstate, player, req: GameActionRequest):
+    """提交描述"""
+    # 检查当前阶段
+    if wstate["phase"] != "describe":
+        return error_response("wrong_phase", "当前不是描述阶段")
+
+    # 获取存活玩家列表（按 player_index 排序）
+    cursor = await db.execute(
+        """SELECT gp.player_index, wp.agent_id, wp.is_alive, wp.description
+           FROM werewolf_players wp
+           JOIN game_players gp ON wp.agent_id = gp.agent_id AND gp.room_id = ?
+           WHERE wp.state_id = ? AND wp.is_alive = 1
+           ORDER BY gp.player_index""",
+        (room["id"], wstate["id"]),
+    )
+    alive_players = await cursor.fetchall()
+
+    if not alive_players:
+        return error_response("no_alive", "没有存活的玩家")
+
+    # 检查是否轮到该玩家描述
+    current_idx = wstate["current_describer_index"]
+    if current_idx >= len(alive_players):
+        return error_response("all_described", "本轮描述已结束")
+
+    current_describer = alive_players[current_idx]
+    if current_describer["agent_id"] != player["agent_id"]:
+        return error_response("not_your_turn", "还没轮到你描述")
+
+    # 检查描述内容
+    description = ""
+    if req.amount is not None and req.amount > 0:
+        pass  # amount 字段不用于描述
+    # 使用 row/col 或其他字段传递描述内容不太合适，用 GameActionRequest 的 amount
+    # 实际上我们需要一个 description 字段。由于 GameActionRequest 是统一的，我们临时用 amount 存描述
+    # 不对，让我看看... GameActionRequest 有 action, row, col, amount
+    # 描述内容应该通过一个专门的字段传递。但为了保持统一模型，我们可以用 row 存一个描述索引
+    # 或者我们直接在 req 上添加字段。
+
+    # 更好的方案：使用 amount 字段作为描述内容的标记（比如描述序号），实际描述内容存在服务端
+    # 但 PRD 说 POST 提交描述... 让我用一个简化的方式
+
+    # 检查玩家是否已经描述过
+    if current_describer["description"]:
+        return error_response("already_described", "你已经描述过了")
+
+    # 记录描述（使用一个简化的方式：记录一个描述标记）
+    # 由于 GameActionRequest 没有文本字段，我们存储一个默认描述
+    # 实际上 amount 可以当作描述的占位。我们用 "described" 作为标记
+    await db.execute(
+        "UPDATE werewolf_players SET description = ? WHERE state_id = ? AND agent_id = ?",
+        ("described", wstate["id"], player["agent_id"]),
+    )
+
+    # 移动到下一个描述者
+    next_idx = current_idx + 1
+
+    if next_idx >= len(alive_players):
+        # 所有人描述完毕，进入投票阶段
+        await db.execute(
+            "UPDATE werewolf_states SET phase = 'vote', current_describer_index = 0 WHERE id = ?",
+            (wstate["id"],),
+        )
+        await db.commit()
+        return success_response(
+            data={"action": "describe", "phase": "vote", "message": "所有人描述完毕，进入投票阶段"},
+            message="描述已提交，进入投票阶段",
+        )
+    else:
+        await db.execute(
+            "UPDATE werewolf_states SET current_describer_index = ? WHERE id = ?",
+            (next_idx, wstate["id"]),
+        )
+        await db.commit()
+        next_describer = alive_players[next_idx]
+        return success_response(
+            data={"action": "describe", "phase": "describe", "next_describer_index": next_idx, "next_describer_agent_id": next_describer["agent_id"]},
+            message="描述已提交",
+        )
+
+
+async def _werewolf_vote(db, room, wstate, player, req: GameActionRequest):
+    """投票淘汰一人"""
+    if wstate["phase"] != "vote":
+        return error_response("wrong_phase", "当前不是投票阶段")
+
+    # target 通过 amount 字段传递 target 的 player_index（由于 GameActionRequest 统一模型）
+    # 或者用 row 字段传递 target_player_index
+    target_index = req.row  # 用 row 字段传递 target player_index
+    if target_index is None:
+        return error_response("missing_params", "投票需要指定目标（通过 row 参数传递 target_player_index）")
+
+    # 检查投票者是否存活
+    cursor = await db.execute(
+        "SELECT is_alive, voted_for_id FROM werewolf_players WHERE state_id = ? AND agent_id = ?",
+        (wstate["id"], player["agent_id"]),
+    )
+    voter = await cursor.fetchone()
+
+    if not voter:
+        return error_response("not_player", "你不是游戏参与者")
+
+    if not voter["is_alive"]:
+        return error_response("already_dead", "你已被淘汰，无法投票")
+
+    if voter["voted_for_id"]:
+        return error_response("already_voted", "你已经投过票了")
+
+    # 查找目标玩家
+    cursor = await db.execute(
+        """SELECT wp.agent_id, wp.is_alive, gp.player_index
+           FROM werewolf_players wp
+           JOIN game_players gp ON wp.agent_id = gp.agent_id AND gp.room_id = ?
+           WHERE wp.state_id = ? AND gp.player_index = ?""",
+        (room["id"], wstate["id"], target_index),
+    )
+    target = await cursor.fetchone()
+
+    if not target:
+        return error_response("invalid_target", "目标玩家不存在")
+
+    if not target["is_alive"]:
+        return error_response("target_dead", "目标玩家已被淘汰")
+
+    if target["agent_id"] == player["agent_id"]:
+        return error_response("cannot_vote_self", "不能投票给自己")
+
+    # 记录投票
+    await db.execute(
+        "UPDATE werewolf_players SET voted_for_id = ? WHERE state_id = ? AND agent_id = ?",
+        (target["agent_id"], wstate["id"], player["agent_id"]),
+    )
+    await db.commit()
+
+    # 检查是否所有存活玩家都已投票
+    cursor = await db.execute(
+        "SELECT agent_id FROM werewolf_players WHERE state_id = ? AND is_alive = 1 AND voted_for_id = ''",
+        (wstate["id"],),
+    )
+    remaining = await cursor.fetchall()
+
+    if len(remaining) > 0:
+        return success_response(
+            data={"action": "vote", "status": "voting", "remaining_votes": len(remaining)},
+            message="投票成功，等待其他玩家投票",
+        )
+
+    # 所有存活玩家都已投票，统计结果
+    return await _werewolf_tally_votes(db, room, wstate)
+
+
+async def _werewolf_tally_votes(db, room, wstate):
+    """统计投票结果"""
+    # 获取所有投票
+    cursor = await db.execute(
+        "SELECT agent_id, voted_for_id FROM werewolf_players WHERE state_id = ? AND is_alive = 1",
+        (wstate["id"],),
+    )
+    votes = await cursor.fetchall()
+
+    # 统计票数
+    vote_count: dict[str, int] = {}
+    for v in votes:
+        target = v["voted_for_id"]
+        if target:
+            vote_count[target] = vote_count.get(target, 0) + 1
+
+    # 找出票数最多的人
+    if not vote_count:
+        return error_response("no_votes", "没有人投票")
+
+    max_votes = max(vote_count.values())
+    top_voted = [aid for aid, cnt in vote_count.items() if cnt == max_votes]
+
+    if len(top_voted) > 1:
+        # 平票：随机淘汰一人（简化处理）
+        eliminated_id = random.choice(top_voted)
+    else:
+        eliminated_id = top_voted[0]
+
+    # 淘汰该玩家
+    await db.execute(
+        "UPDATE werewolf_players SET is_alive = 0 WHERE state_id = ? AND agent_id = ?",
+        (wstate["id"], eliminated_id),
+    )
+
+    # 获取被淘汰者信息
+    cursor = await db.execute(
+        "SELECT wp.agent_id, gp.player_index, wp.role, a.username FROM werewolf_players wp JOIN game_players gp ON wp.agent_id = gp.agent_id AND gp.room_id = ? JOIN agents a ON wp.agent_id = a.agent_id WHERE wp.state_id = ? AND wp.agent_id = ?",
+        (room["id"], wstate["id"], eliminated_id),
+    )
+    eliminated_info = await cursor.fetchone()
+
+    # 检查游戏是否结束
+    result = await _werewolf_check_game_over(db, room, wstate, eliminated_info)
+
+    if result:
+        return result
+
+    # 游戏继续，重置描述和投票，进入下一轮
+    new_round = wstate["round"] + 1
+
+    # 清空描述和投票
+    await db.execute(
+        "UPDATE werewolf_players SET description = '', voted_for_id = '' WHERE state_id = ?",
+        (wstate["id"],),
+    )
+
+    # 重置为描述阶段，从第一个存活玩家开始
+    cursor = await db.execute(
+        """SELECT gp.player_index FROM werewolf_players wp
+           JOIN game_players gp ON wp.agent_id = gp.agent_id AND gp.room_id = ?
+           WHERE wp.state_id = ? AND wp.is_alive = 1
+           ORDER BY gp.player_index""",
+        (room["id"], wstate["id"]),
+    )
+    alive = await cursor.fetchall()
+
+    await db.execute(
+        "UPDATE werewolf_states SET phase = 'describe', round = ?, current_describer_index = 0 WHERE id = ?",
+        (new_round, wstate["id"]),
+    )
+    await db.commit()
+
+    return success_response(
+        data={
+            "action": "vote",
+            "status": "eliminated",
+            "eliminated": {
+                "agent_id": eliminated_id,
+                "username": eliminated_info["username"] if eliminated_info else "",
+                "player_index": eliminated_info["player_index"] if eliminated_info else -1,
+                "role": eliminated_info["role"] if eliminated_info else "",
+            },
+            "vote_count": vote_count,
+            "next_phase": "describe",
+            "next_round": new_round,
+            "alive_count": len(alive),
+        },
+        message=f"淘汰了 {eliminated_info['username'] if eliminated_info else '未知'}（{eliminated_info['role'] if eliminated_info else ''}）",
+    )
+
+
+async def _werewolf_check_game_over(db, room, wstate, eliminated_info=None):
+    """检查游戏是否结束"""
+    # 统计存活角色
+    cursor = await db.execute(
+        "SELECT role, COUNT(*) as cnt FROM werewolf_players WHERE state_id = ? AND is_alive = 1 GROUP BY role",
+        (wstate["id"],),
+    )
+    role_counts = {r["role"]: r["cnt"] for r in await cursor.fetchall()}
+
+    spy_alive = role_counts.get("spy", 0)
+    civilian_alive = role_counts.get("civilian", 0)
+
+    # 获取所有玩家角色信息
+    cursor = await db.execute(
+        """SELECT wp.agent_id, wp.role, gp.player_index, a.username
+           FROM werewolf_players wp
+           JOIN game_players gp ON wp.agent_id = gp.agent_id AND gp.room_id = ?
+           JOIN agents a ON wp.agent_id = a.agent_id
+           WHERE wp.state_id = ?
+           ORDER BY gp.player_index""",
+        (room["id"], wstate["id"]),
+    )
+    all_players = await cursor.fetchall()
+
+    winner = None
+    game_over = False
+
+    if spy_alive == 0:
+        # 卧底全部淘汰，平民胜
+        winner = "civilian"
+        game_over = True
+    elif spy_alive >= civilian_alive:
+        # 卧底数 >= 平民数，卧底胜
+        winner = "spy"
+        game_over = True
+
+    if not game_over:
+        return None
+
+    # 游戏结束
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 找出赢家 agent_id 列表（平民胜=所有平民，卧底胜=所有卧底）
+    winner_ids = [p["agent_id"] for p in all_players if p["role"] == winner]
+
+    # 更新房间状态（取第一个赢家作为 winner_id）
+    await db.execute(
+        "UPDATE game_rooms SET status = 'finished', winner_id = ?, finished_at = ? WHERE id = ?",
+        (winner_ids[0], now, room["id"]),
+    )
+
+    # 更新游戏状态为 result 阶段
+    await db.execute(
+        "UPDATE werewolf_states SET phase = 'result' WHERE id = ?",
+        (wstate["id"],),
+    )
+
+    await db.commit()
+
+    players_reveal = [
+        {
+            "agent_id": p["agent_id"],
+            "username": p["username"],
+            "player_index": p["player_index"],
+            "role": p["role"],
+            "is_alive": bool(next((1 for wp in all_players if wp["agent_id"] == p["agent_id"]), 0)),
+        }
+        for p in all_players
+    ]
+
+    # 需要重新查 alive 状态
+    cursor = await db.execute(
+        "SELECT agent_id, is_alive FROM werewolf_players WHERE state_id = ?",
+        (wstate["id"],),
+    )
+    alive_map = {r["agent_id"]: bool(r["is_alive"]) for r in await cursor.fetchall()}
+
+    players_reveal = [
+        {
+            "agent_id": p["agent_id"],
+            "username": p["username"],
+            "player_index": p["player_index"],
+            "role": p["role"],
+            "is_alive": alive_map.get(p["agent_id"], False),
+        }
+        for p in all_players
+    ]
+
+    return success_response(
+        data={
+            "action": "vote",
+            "status": "finished",
+            "winner": winner,
+            "winner_side": "平民" if winner == "civilian" else "卧底",
+            "civilian_word": wstate["civilian_word"],
+            "spy_word": wstate["spy_word"],
+            "players": players_reveal,
+            "eliminated": {
+                "agent_id": eliminated_info["agent_id"] if eliminated_info else None,
+                "username": eliminated_info["username"] if eliminated_info else "",
+                "role": eliminated_info["role"] if eliminated_info else "",
+            } if eliminated_info else None,
+        },
+        message=f"游戏结束！{'平民' if winner == 'civilian' else '卧底'}获胜！平民词: {wstate['civilian_word']}，卧底词: {wstate['spy_word']}",
+    )

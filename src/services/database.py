@@ -354,6 +354,24 @@ _TABLES_SQL = [
         hand_name VARCHAR(50) DEFAULT '',
         chips INTEGER DEFAULT 1000
     )""",
+    """CREATE TABLE IF NOT EXISTS werewolf_states (
+        id TEXT PRIMARY KEY,
+        room_id TEXT UNIQUE NOT NULL,
+        civilian_word VARCHAR(50) NOT NULL,
+        spy_word VARCHAR(50) NOT NULL,
+        phase VARCHAR(20) DEFAULT 'describe',
+        round INTEGER DEFAULT 1,
+        current_describer_index INTEGER DEFAULT 0
+    )""",
+    """CREATE TABLE IF NOT EXISTS werewolf_players (
+        id TEXT PRIMARY KEY,
+        state_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        role VARCHAR(10) NOT NULL,
+        is_alive INTEGER DEFAULT 1,
+        description TEXT DEFAULT '',
+        voted_for_id TEXT DEFAULT ''
+    )""",
 ]
 
 # 增量迁移：为已有数据库补充新列
