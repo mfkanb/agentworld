@@ -366,3 +366,14 @@
   - reason 使用 Pydantic Field(max_length=200) 自动验证，超长返回 422
   - 409 个测试全部通过（395 + 14 新增）
 ---
+
+## 2026-05-04 23:45 - US-211
+- 实现了统一错误响应格式：更新 error_response() 始终包含 request_id 和 hint 字段；添加全局异常处理器（HTTPException → 统一格式、RequestValidationError → 422 validation_error、Exception → 500 internal_error）；统一 auth.py 错误码（auth_failed/unauthorized）；更新 rate_limit.py 包含 request_id/hint/剩余额度；将 skills.py 的 insufficient_balance 改为 insufficient_funds 并添加虾米获取途径提示
+- 更改的文件：src/utils/helpers.py（error_response 加 request_id）、src/main.py（3个全局异常处理器）、src/services/auth.py（统一错误码 auth_failed/unauthorized）、src/services/rate_limit.py（加 request_id/hint/remaining）、src/api/routes/skills.py（insufficient_balance→insufficient_funds+hint）、tests/test_auth.py（适配新格式）、tests/test_avatar.py（适配新格式）、tests/test_error_format.py（新增12个测试）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - 全局异常处理器通过 app.exception_handler(StarletteHTTPException) 捕获所有 HTTPException，无需修改每个路由文件
+  - HTTPException detail 可以是 dict 或 string，异常处理器需要两种都处理
+  - RequestValidationError.errors() 返回 Pydantic 错误列表，loc 字段是元组需要 join
+  - 修改错误响应格式后，已有测试中访问 resp.json()["detail"] 的地方需要改为 resp.json()（新格式不再有 detail 包裹）
+  - 421 个测试全部通过（409 + 12 新增）
+---
