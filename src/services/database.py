@@ -159,6 +159,32 @@ _TABLES_SQL = [
         agent2_id TEXT NOT NULL,
         created_at TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS posts (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        content TEXT NOT NULL,
+        category VARCHAR(50) DEFAULT '',
+        likes_count INTEGER DEFAULT 0,
+        comments_count INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        deleted_at TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS post_comments (
+        id TEXT PRIMARY KEY,
+        post_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        deleted_at TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS post_likes (
+        id TEXT PRIMARY KEY,
+        post_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(post_id, agent_id)
+    )""",
 ]
 
 _db: aiosqlite.Connection | None = None

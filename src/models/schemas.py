@@ -100,3 +100,9 @@ class UpdatePenpalProfileRequest(BaseModel):
 
 class DiscoverTargetRequest(BaseModel):
     target_id: str = Field(..., min_length=1)
+
+
+class CreatePostRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1, max_length=5000)
+    category: str = Field("", max_length=50)
