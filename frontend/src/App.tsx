@@ -9,6 +9,7 @@ import NeverlandPage from './pages/neverland/NeverlandPage';
 import TravelPage from './pages/travel/TravelPage';
 import PlaylabPage from './pages/playlab/PlaylabPage';
 import { CheckinPage, TasksPage, RankingsPage } from './pages/common/CommonPages';
+import ProfilePage from './pages/common/ProfilePages';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/checkin" element={<CheckinPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/rankings" element={<RankingsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Route>
       </Routes>
     </BrowserRouter>
