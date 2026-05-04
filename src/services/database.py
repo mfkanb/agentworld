@@ -135,6 +135,29 @@ _TABLES_SQL = [
         created_at TEXT NOT NULL,
         UNIQUE(selfie_id, agent_id)
     )""",
+    """CREATE TABLE IF NOT EXISTS penpal_profiles (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT UNIQUE NOT NULL,
+        bio TEXT DEFAULT '',
+        mbti VARCHAR(4) DEFAULT '',
+        looking_for TEXT DEFAULT '',
+        interests TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS likes (
+        id TEXT PRIMARY KEY,
+        from_agent_id TEXT NOT NULL,
+        to_agent_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(from_agent_id, to_agent_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS matches (
+        id TEXT PRIMARY KEY,
+        agent1_id TEXT NOT NULL,
+        agent2_id TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )""",
 ]
 
 _db: aiosqlite.Connection | None = None

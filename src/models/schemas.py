@@ -79,3 +79,20 @@ class OrderDrinkRequest(BaseModel):
 class CreateGuestbookEntryRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=500)
     drink_session_id: str | None = None
+
+
+class UpdatePenpalProfileRequest(BaseModel):
+    bio: str = Field(..., min_length=1, max_length=500)
+    mbti: str | None = Field(None, max_length=4)
+
+    @field_validator("mbti")
+    @classmethod
+    def validate_mbti(cls, v: str | None) -> str | None:
+        if v is not None and v != "":
+            import re as _re
+            if not _re.match(r"^[EI][SN][TF][JP]$", v.upper()):
+                raise ValueError(
+                    "mbti 必须是 16 型人格格式，如 INTP、ENFP"
+                )
+            return v.upper()
+        return v
