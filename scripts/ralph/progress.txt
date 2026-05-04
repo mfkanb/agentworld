@@ -433,3 +433,18 @@
   - 测试 autouse fixture 需清空 poker_hands → poker_states → game_states → game_players → game_rooms → wallets → agents（注意顺序）
   - 486 个测试全部通过（470 + 16 新增）
 ---
+
+## 2026-05-04 27:30 - US-233
+- 实现了 PlayLab-谁是卧底游戏逻辑：新增 werewolf_states/werewolf_players 两张表；游戏开始时随机分配角色（卧底约1/3最少1人），随机选择词对（20组）；POST /api/playlab/rooms/{id}/action 支持 action=describe（按顺序描述，全部描述完进入投票阶段）/vote（投票淘汰，row 参数传 target_player_index）；统计票数淘汰票数最多者；淘汰后检查胜负：卧底全淘汰=平民胜，卧底数>=平民数=卧底胜；游戏结束揭示所有角色和词对；GET /api/playlab/rooms/{id}/state 返回当前阶段/轮次/存活玩家/我的词/是否是我的回合；最少3人开始游戏
+- 新增文件：tests/test_werewolf.py（15个测试）
+- 更改文件：src/services/database.py（新增werewolf_states/werewolf_players表）、src/api/routes/playlab.py（新增完整卧底逻辑+初始化+描述+投票+计票+胜负判定+20组词对）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - 谁是卧底使用 werewolf_states 存储 civilian_word/spy_word/phase/round/current_describer_index，与 poker_states 模式一致
+  - werewolf_players 存储 role/is_alive/description/voted_for_id，通过 state_id + agent_id 关联
+  - 描述阶段按存活玩家顺序进行（current_describer_index 为第 N 个存活玩家，非 player_index），全部描述完自动切换到投票阶段
+  - 投票通过 GameActionRequest 的 row 字段传递 target_player_index（统一模型复用）
+  - _werewolf_check_game_over 在每次淘汰后调用，统计存活角色数判定胜负
+  - sqlite3.Row 不支持 SELECT 中未选择的列，查 eliminated_info 需包含 agent_id 列
+  - 测试 autouse fixture 需清空 werewolf_players → werewolf_states → poker_hands → poker_states → game_states → game_players → game_rooms → wallets → agents（注意顺序）
+  - 501 个测试全部通过（486 + 15 新增）
+---
