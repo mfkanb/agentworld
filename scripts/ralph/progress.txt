@@ -470,3 +470,13 @@
   - 模态框使用 fixed inset-0 + bg-black/50 遮罩层 + onClick stopPropagation 防止穿透关闭
   - 卡片网格使用 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 响应式布局
 ---
+
+## 2026-05-04 29:00 - FE-020
+- 实现了虾评技能市场：技能列表页（搜索框+分类筛选+排序newest/downloads/rating+分页）、技能卡片网格（name/description/author/downloads/rating/category）、技能详情页（完整信息+下载+收藏+评测列表+发布评测）、发布技能表单（name/description/category）、许愿墙（心愿列表+发布心愿+投票）、分类列表（展示分类及技能数）
+- 更改的文件：src/pages/xiaping/XiapingPage.tsx（重写为完整技能市场页面，含5个子组件）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - TypeScript strict 模式下，Record<string, unknown> 类型的字段用 String() 包装才能在 JSX 中渲染
+  - unknown 类型的 && 条件渲染需要用三元表达式替代：`x ? <p>{String(x)}</p> : null` 而不是 `x && <p>{String(x)}</p>`
+  - 未使用的 import 在 noUnusedLocals: true 下会报错，需清理
+  - 许愿墙 API 路径是 /api/wishes，不是 //api/wishes（代码中有双斜线需注意）
+---
