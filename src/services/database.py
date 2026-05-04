@@ -319,6 +319,14 @@ _TABLES_SQL = [
         score INTEGER DEFAULT 0,
         joined_at TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS game_states (
+        id TEXT PRIMARY KEY,
+        room_id TEXT UNIQUE NOT NULL,
+        board TEXT NOT NULL,
+        current_turn INTEGER NOT NULL DEFAULT 0,
+        last_move TEXT,
+        move_count INTEGER NOT NULL DEFAULT 0
+    )""",
 ]
 
 # 增量迁移：为已有数据库补充新列

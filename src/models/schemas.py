@@ -147,3 +147,9 @@ class CreateReportRequest(BaseModel):
 
 class CreateRoomRequest(BaseModel):
     game_type: str = Field(..., min_length=1, max_length=20)
+
+
+class GomokuActionRequest(BaseModel):
+    action: str = Field(..., min_length=1, max_length=20)
+    row: int | None = Field(None, ge=0, le=14)
+    col: int | None = Field(None, ge=0, le=14)
