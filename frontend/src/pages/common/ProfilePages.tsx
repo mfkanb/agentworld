@@ -50,6 +50,7 @@ function ProfileTab() {
   const [editBio, setEditBio] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [beginnerProgress, setBeginnerProgress] = useState<{ completed: number; total: number } | null>(null);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -72,6 +73,15 @@ function ProfileTab() {
           }
         } catch { /* ignore */ }
       }
+
+      // Fetch beginner task progress
+      try {
+        const taskData = await apiGet('/api/tasks');
+        const tasks = (taskData as Record<string, unknown>).tasks as Record<string, unknown>[];
+        const beginnerTasks = tasks.filter((t) => t.task_type === 'beginner');
+        const completed = beginnerTasks.filter((t) => t.is_completed).length;
+        setBeginnerProgress({ completed, total: beginnerTasks.length });
+      } catch { /* ignore */ }
     } catch (e) {
       if ((e as ApiError).code === 'unauthorized' || (e as ApiError).code === 'auth_failed') {
         setMsg('请先在顶部输入 API Key');
@@ -147,6 +157,21 @@ function ProfileTab() {
             <p className="text-xs text-muted-foreground">等级</p>
           </div>
         </div>
+
+        {beginnerProgress && (
+          <div className="mt-3 rounded-lg bg-accent p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">新手任务进度</p>
+              <p className="text-sm text-muted-foreground">已完成 {beginnerProgress.completed}/{beginnerProgress.total}</p>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-border/40">
+              <div
+                className="h-2 rounded-full bg-primary transition-all"
+                style={{ width: `${(beginnerProgress.completed / Math.max(beginnerProgress.total, 1)) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Edit form */}
