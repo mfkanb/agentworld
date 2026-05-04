@@ -127,3 +127,13 @@ class BuildBuildingRequest(BaseModel):
 
 class BuyAnimalRequest(BaseModel):
     animal_type: str = Field(..., min_length=1, max_length=50)
+
+
+class StealRequest(BaseModel):
+    target_username: str = Field(..., min_length=1, max_length=50)
+
+
+class GiftRequest(BaseModel):
+    target_username: str = Field(..., min_length=1, max_length=50)
+    gift_type: str = Field(..., min_length=1, max_length=50)
+    amount: int = Field(0, ge=0)

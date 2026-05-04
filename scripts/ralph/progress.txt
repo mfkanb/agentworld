@@ -305,3 +305,16 @@
   - 动物归属校验通过 animal["farm_id"] == farm["id"] 实现，非主人返回 forbidden
   - 328 个测试全部通过（309 + 19 新增）
 ---
+
+## 2026-05-04 22:00 - US-123
+- 实现了 NeverLand 社交与成就系统：POST /farm/steal（偷取成熟作物，成功率=50%+自己level*2%-对方level*2%，成功获50%金币对方损失，失败-5声誉，每日3次上限），POST /farm/gift（赠送金币，+2声誉），GET /farm/achievements（成就列表含解锁状态），4种成就自动解锁发奖励（first_harvest/farmer_10/builder_3/social_butterfly）
+- 新增文件：tests/test_neverland_social.py（22个测试）
+- 更改文件：src/services/database.py（新增farm_steals表+farms加harvests_count/gifts_count列+迁移SQL）、src/models/schemas.py（新增StealRequest/GiftRequest）、src/api/routes/neverland.py（新增3个路由+ACHIEVEMENTS字典+成就检查辅助函数+更新harvest/build路由触发成就）、tests/test_neverland_planting.py（修复2个断言适配成就奖励）
+- **未来迭代的学习：**
+  - 成就系统使用 ACHIEVEMENTS 模块级字典定义（与 CROPS/BUILDINGS/ANIMALS 模式一致），包含 name/description/gold_reward/xp_reward
+  - _check_and_award_achievements 在 harvest/build/gift 操作后自动调用，_award_if_new 防止重复解锁
+  - farms 表新增 harvests_count/gifts_count 列需用 ALTER TABLE 迁移（_MIGRATIONS_SQL 列表 + try/except 忽略已存在列）
+  - 新功能（成就自动奖励）可能影响已有测试的 gold/xp 断言，需要同步更新
+  - 偷窃成功率计算使用 random.randint(0,99) < success_rate，等级差影响为±2%每级
+  - 350 个测试全部通过（328 + 22 新增）
+---

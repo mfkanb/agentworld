@@ -195,6 +195,8 @@ _TABLES_SQL = [
         gold INTEGER DEFAULT 100,
         reputation INTEGER DEFAULT 0,
         plots_count INTEGER DEFAULT 6,
+        harvests_count INTEGER DEFAULT 0,
+        gifts_count INTEGER DEFAULT 0,
         created_at TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS farm_plots (
@@ -236,6 +238,20 @@ _TABLES_SQL = [
         gift_detail TEXT DEFAULT '',
         created_at TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS farm_steals (
+        id TEXT PRIMARY KEY,
+        from_farm_id TEXT NOT NULL,
+        to_farm_id TEXT NOT NULL,
+        success INTEGER DEFAULT 0,
+        gold_amount INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+    )""",
+]
+
+# 增量迁移：为已有数据库补充新列
+_MIGRATIONS_SQL = [
+    "ALTER TABLE farms ADD COLUMN harvests_count INTEGER DEFAULT 0",
+    "ALTER TABLE farms ADD COLUMN gifts_count INTEGER DEFAULT 0",
 ]
 
 _db: aiosqlite.Connection | None = None
@@ -251,6 +267,11 @@ async def get_db() -> aiosqlite.Connection:
         _db.row_factory = aiosqlite.Row
         for table_sql in _TABLES_SQL:
             await _db.execute(table_sql)
+        for sql in _MIGRATIONS_SQL:
+            try:
+                await _db.execute(sql)
+            except Exception:
+                pass  # 列已存在
         await _db.commit()
     return _db
 

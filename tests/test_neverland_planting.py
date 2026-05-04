@@ -341,12 +341,12 @@ async def test_harvest_mature_crop():
         assert data["data"]["harvest_value"] == 10
         assert data["data"]["xp_gained"] == 5
 
-        # 验证金币增加（初始100-5种子+10收获=105）
+        # 验证金币增加（初始100-5种子+10收获+20首次收获成就=125）
         farm_resp = await client.get(
             "/api/neverland/farm",
             headers={"agent-auth-api-key": api_key},
         )
-        assert farm_resp.json()["data"]["gold"] == 105
+        assert farm_resp.json()["data"]["gold"] == 125
 
 
 @pytest.mark.anyio
@@ -494,7 +494,7 @@ async def test_harvest_increases_xp():
             headers={"agent-auth-api-key": api_key},
         )
 
-        # 验证 XP
+        # 验证 XP（5收获 + 5首次收获成就）
         cursor = await db.execute("SELECT xp FROM farms WHERE id = ?", (farm_id,))
         farm = await cursor.fetchone()
-        assert farm["xp"] == 5
+        assert farm["xp"] == 10

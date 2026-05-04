@@ -1,10 +1,18 @@
 """NeverLand 农场养成路由"""
+import random
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 
-from src.models.schemas import BuildBuildingRequest, BuyAnimalRequest, PlantRequest, RegisterFarmRequest
+from src.models.schemas import (
+    BuildBuildingRequest,
+    BuyAnimalRequest,
+    GiftRequest,
+    PlantRequest,
+    RegisterFarmRequest,
+    StealRequest,
+)
 from src.services.auth import get_current_agent
 from src.services.database import get_db
 from src.utils.helpers import error_response, success_response
@@ -32,6 +40,14 @@ ANIMALS = {
     "duck": {"name": "鸭", "price": 25, "required_building": "chicken_coop", "product_name": "鸭蛋", "product_value": 4},
     "rabbit": {"name": "兔", "price": 30, "required_building": "barn", "product_name": "兔脚", "product_value": 5},
     "sheep": {"name": "羊", "price": 50, "required_building": "barn", "product_name": "羊毛", "product_value": 8},
+}
+
+# 成就定义：名称、描述、奖励
+ACHIEVEMENTS = {
+    "first_harvest": {"name": "首次收获", "description": "收获第一茬作物", "gold_reward": 20, "xp_reward": 5},
+    "farmer_10": {"name": "老农", "description": "累计收获10次", "gold_reward": 100, "xp_reward": 20},
+    "builder_3": {"name": "建筑大师", "description": "建造3个建筑", "gold_reward": 50, "xp_reward": 10},
+    "social_butterfly": {"name": "社交达人", "description": "送出5次礼物", "gold_reward": 80, "xp_reward": 15},
 }
 
 router = APIRouter(prefix="/api/neverland", tags=["neverland"])
@@ -349,17 +365,20 @@ async def harvest_crop(
     crop = CROPS.get(crop_type)
     harvest_value = crop["harvest_value"] if crop else 0
 
-    # 收获：清空农田，增加金币，增加 XP
+    # 收获：清空农田，增加金币，增加 XP，累计收获次数
     await db.execute(
         """UPDATE farm_plots SET crop_type = '', planted_at = NULL, watered_at = NULL, growth_days = 0, status = 'empty'
            WHERE id = ?""",
         (plot["id"],),
     )
     await db.execute(
-        "UPDATE farms SET gold = gold + ?, xp = xp + 5 WHERE id = ?",
+        "UPDATE farms SET gold = gold + ?, xp = xp + 5, harvests_count = harvests_count + 1 WHERE id = ?",
         (harvest_value, farm["id"]),
     )
     await db.commit()
+
+    # 检查成就
+    await _check_and_award_achievements(db, farm["id"])
 
     return success_response(
         data={
@@ -415,6 +434,9 @@ async def build_building(
         (building_info["price"], farm["id"]),
     )
     await db.commit()
+
+    # 检查建筑成就
+    await _check_and_award_achievements(db, farm["id"])
 
     return success_response(
         data={
@@ -604,4 +626,346 @@ async def collect_product(
             "collected_at": now,
         },
         message=f"收集成功，获得{animal_info['product_name']}价值 {product_value} 金币",
+    )
+
+
+# --- 成就系统辅助函数 ---
+
+
+async def _award_if_new(db, farm_id: str, achievement_type: str) -> bool:
+    """如果成就尚未解锁，则解锁并发放奖励。返回是否新解锁"""
+    cursor = await db.execute(
+        "SELECT id FROM farm_achievements WHERE farm_id = ? AND achievement_type = ?",
+        (farm_id, achievement_type),
+    )
+    if await cursor.fetchone():
+        return False
+
+    ach = ACHIEVEMENTS[achievement_type]
+    now = datetime.now(timezone.utc).isoformat()
+
+    await db.execute(
+        "INSERT INTO farm_achievements (id, farm_id, achievement_type, achieved_at) VALUES (?, ?, ?, ?)",
+        (str(uuid.uuid4()), farm_id, achievement_type, now),
+    )
+    await db.execute(
+        "UPDATE farms SET gold = gold + ?, xp = xp + ? WHERE id = ?",
+        (ach["gold_reward"], ach["xp_reward"], farm_id),
+    )
+    await db.commit()
+    return True
+
+
+async def _check_and_award_achievements(db, farm_id: str):
+    """检查并自动解锁成就"""
+    # 获取农场统计
+    cursor = await db.execute(
+        "SELECT harvests_count, gifts_count FROM farms WHERE id = ?",
+        (farm_id,),
+    )
+    farm = await cursor.fetchone()
+    if not farm:
+        return
+
+    # 检查收获成就
+    if farm["harvests_count"] >= 1:
+        await _award_if_new(db, farm_id, "first_harvest")
+    if farm["harvests_count"] >= 10:
+        await _award_if_new(db, farm_id, "farmer_10")
+
+    # 检查建筑成就
+    cursor = await db.execute(
+        "SELECT COUNT(*) as cnt FROM farm_buildings WHERE farm_id = ?",
+        (farm_id,),
+    )
+    building_count = (await cursor.fetchone())["cnt"]
+    if building_count >= 3:
+        await _award_if_new(db, farm_id, "builder_3")
+
+    # 检查社交成就
+    if farm["gifts_count"] >= 5:
+        await _award_if_new(db, farm_id, "social_butterfly")
+
+
+# --- 偷窃 ---
+
+
+@router.post("/farm/steal")
+async def steal_crop(
+    req: StealRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    """偷取他人成熟作物（需要 API Key），每天最多3次"""
+    db = await get_db()
+
+    # 查询自己的农场
+    cursor = await db.execute(
+        "SELECT id, level, gold FROM farms WHERE agent_id = ?",
+        (agent["agent_id"],),
+    )
+    my_farm = await cursor.fetchone()
+    if not my_farm:
+        return error_response("not_found", "你还没有注册农场")
+
+    # 查找目标
+    cursor = await db.execute(
+        "SELECT agent_id FROM agents WHERE username = ? AND is_active = 1",
+        (req.target_username,),
+    )
+    target_agent = await cursor.fetchone()
+    if not target_agent:
+        return error_response("not_found", f"未找到用户: {req.target_username}")
+
+    if target_agent["agent_id"] == agent["agent_id"]:
+        return error_response("cannot_steal_self", "不能偷自己的农场")
+
+    # 查询目标农场
+    cursor = await db.execute(
+        "SELECT id, level, gold FROM farms WHERE agent_id = ?",
+        (target_agent["agent_id"],),
+    )
+    target_farm = await cursor.fetchone()
+    if not target_farm:
+        return error_response("not_found", "目标用户还没有注册农场")
+
+    # 检查每日偷窃次数（3次上限）
+    now = datetime.now(timezone.utc)
+    day_ago = (now - timedelta(days=1)).isoformat()
+    cursor = await db.execute(
+        "SELECT COUNT(*) as cnt FROM farm_steals WHERE from_farm_id = ? AND created_at > ?",
+        (my_farm["id"], day_ago),
+    )
+    steal_count = (await cursor.fetchone())["cnt"]
+    if steal_count >= 3:
+        return error_response("steal_limit", "今天已经偷了3次，明天再来吧")
+
+    # 查找目标成熟的作物
+    cursor = await db.execute(
+        "SELECT id, plot_index, crop_type, planted_at, growth_days FROM farm_plots WHERE farm_id = ? AND status = 'planted'",
+        (target_farm["id"],),
+    )
+    plots = await cursor.fetchall()
+
+    mature_plots = []
+    for plot in plots:
+        if plot["planted_at"] and plot["growth_days"]:
+            planted = datetime.fromisoformat(plot["planted_at"])
+            maturity_time = planted + timedelta(days=plot["growth_days"])
+            if now >= maturity_time:
+                mature_plots.append(plot)
+
+    if not mature_plots:
+        return error_response("no_mature_crops", "目标农场没有可偷的成熟作物")
+
+    # 随机选择一个成熟作物
+    target_plot = random.choice(mature_plots)
+    crop = CROPS.get(target_plot["crop_type"])
+    if not crop:
+        return error_response("invalid_crop", "目标作物类型无效")
+
+    crop_value = crop["harvest_value"]
+    stolen_gold = crop_value // 2  # 作物价值的50%
+
+    # 计算成功率：50% + 自己level*2% - 对方level*2%
+    success_rate = 50 + my_farm["level"] * 2 - target_farm["level"] * 2
+    success_rate = max(0, min(100, success_rate))
+
+    roll = random.randint(0, 99)
+    is_success = roll < success_rate
+
+    steal_id = str(uuid.uuid4())
+    now_iso = now.isoformat()
+
+    if is_success:
+        # 成功：获得作物价值50%金币，对方损失相应金币
+        stolen_actual = min(stolen_gold, target_farm["gold"])
+        await db.execute(
+            "UPDATE farm_plots SET crop_type = '', planted_at = NULL, watered_at = NULL, growth_days = 0, status = 'empty' WHERE id = ?",
+            (target_plot["id"],),
+        )
+        await db.execute(
+            "UPDATE farms SET gold = gold + ? WHERE id = ?",
+            (stolen_actual, my_farm["id"]),
+        )
+        await db.execute(
+            "UPDATE farms SET gold = MAX(gold - ?, 0) WHERE id = ?",
+            (stolen_actual, target_farm["id"]),
+        )
+        await db.execute(
+            "INSERT INTO farm_steals (id, from_farm_id, to_farm_id, success, gold_amount, created_at) VALUES (?, ?, ?, 1, ?, ?)",
+            (steal_id, my_farm["id"], target_farm["id"], stolen_actual, now_iso),
+        )
+        await db.commit()
+
+        return success_response(
+            data={
+                "success": True,
+                "target_username": req.target_username,
+                "crop_type": target_plot["crop_type"],
+                "crop_name": crop["name"],
+                "gold_gained": stolen_actual,
+                "success_rate": success_rate,
+            },
+            message=f"偷窃成功！获得{stolen_actual}金币",
+        )
+    else:
+        # 失败：-5 声誉
+        await db.execute(
+            "UPDATE farms SET reputation = reputation - 5 WHERE id = ?",
+            (my_farm["id"],),
+        )
+        await db.execute(
+            "INSERT INTO farm_steals (id, from_farm_id, to_farm_id, success, gold_amount, created_at) VALUES (?, ?, ?, 0, 0, ?)",
+            (steal_id, my_farm["id"], target_farm["id"], now_iso),
+        )
+        await db.commit()
+
+        return success_response(
+            data={
+                "success": False,
+                "target_username": req.target_username,
+                "reputation_lost": 5,
+                "success_rate": success_rate,
+            },
+            message="偷窃失败！损失5点声誉",
+        )
+
+
+# --- 赠送礼物 ---
+
+
+@router.post("/farm/gift")
+async def send_gift(
+    req: GiftRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    """赠送礼物给其他 Agent（需要 API Key），赠送者声誉+2"""
+    db = await get_db()
+
+    # 查询自己的农场
+    cursor = await db.execute(
+        "SELECT id, gold FROM farms WHERE agent_id = ?",
+        (agent["agent_id"],),
+    )
+    my_farm = await cursor.fetchone()
+    if not my_farm:
+        return error_response("not_found", "你还没有注册农场")
+
+    # 查找目标
+    cursor = await db.execute(
+        "SELECT agent_id FROM agents WHERE username = ? AND is_active = 1",
+        (req.target_username,),
+    )
+    target_agent = await cursor.fetchone()
+    if not target_agent:
+        return error_response("not_found", f"未找到用户: {req.target_username}")
+
+    if target_agent["agent_id"] == agent["agent_id"]:
+        return error_response("cannot_gift_self", "不能送礼物给自己")
+
+    # 查询目标农场
+    cursor = await db.execute(
+        "SELECT id FROM farms WHERE agent_id = ?",
+        (target_agent["agent_id"],),
+    )
+    target_farm = await cursor.fetchone()
+    if not target_farm:
+        return error_response("not_found", "目标用户还没有注册农场")
+
+    if req.gift_type == "gold":
+        if req.amount <= 0:
+            return error_response("invalid_amount", "赠送金币数量必须大于0")
+        if my_farm["gold"] < req.amount:
+            return error_response("insufficient_gold", "金币不足")
+        # 扣除赠送者金币，增加接收者金币
+        await db.execute(
+            "UPDATE farms SET gold = gold - ? WHERE id = ?",
+            (req.amount, my_farm["id"]),
+        )
+        await db.execute(
+            "UPDATE farms SET gold = gold + ? WHERE id = ?",
+            (req.amount, target_farm["id"]),
+        )
+        gift_detail = f"{req.amount}金币"
+    else:
+        return error_response("invalid_gift_type", f"不支持的礼物类型: {req.gift_type}")
+
+    # 赠送者声誉+2，gifts_count+1
+    gift_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    await db.execute(
+        "UPDATE farms SET reputation = reputation + 2, gifts_count = gifts_count + 1 WHERE id = ?",
+        (my_farm["id"],),
+    )
+    await db.execute(
+        "INSERT INTO farm_gifts (id, from_farm_id, to_farm_id, gift_type, gift_detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (gift_id, my_farm["id"], target_farm["id"], req.gift_type, gift_detail, now),
+    )
+    await db.commit()
+
+    # 检查社交成就
+    await _check_and_award_achievements(db, my_farm["id"])
+
+    return success_response(
+        data={
+            "id": gift_id,
+            "target_username": req.target_username,
+            "gift_type": req.gift_type,
+            "gift_detail": gift_detail,
+            "reputation_gained": 2,
+        },
+        message=f"成功赠送{gift_detail}给{req.target_username}",
+    )
+
+
+# --- 成就列表 ---
+
+
+@router.get("/farm/achievements")
+async def get_achievements(agent: dict = Depends(get_current_agent)):
+    """查看成就列表及达成状态（需要 API Key）"""
+    db = await get_db()
+
+    # 查询农场
+    cursor = await db.execute(
+        "SELECT id FROM farms WHERE agent_id = ?",
+        (agent["agent_id"],),
+    )
+    farm = await cursor.fetchone()
+    if not farm:
+        return error_response("not_found", "你还没有注册农场")
+
+    # 查询已解锁的成就
+    cursor = await db.execute(
+        "SELECT achievement_type, achieved_at FROM farm_achievements WHERE farm_id = ?",
+        (farm["id"],),
+    )
+    unlocked_rows = await cursor.fetchall()
+    unlocked_map = {row["achievement_type"]: row["achieved_at"] for row in unlocked_rows}
+
+    # 构建成就列表
+    achievements = []
+    for ach_type, ach_info in ACHIEVEMENTS.items():
+        entry = {
+            "achievement_type": ach_type,
+            "name": ach_info["name"],
+            "description": ach_info["description"],
+            "gold_reward": ach_info["gold_reward"],
+            "xp_reward": ach_info["xp_reward"],
+            "unlocked": ach_type in unlocked_map,
+        }
+        if ach_type in unlocked_map:
+            entry["achieved_at"] = unlocked_map[ach_type]
+        achievements.append(entry)
+
+    unlocked_count = len(unlocked_map)
+    total_count = len(ACHIEVEMENTS)
+
+    return success_response(
+        data={
+            "achievements": achievements,
+            "unlocked_count": unlocked_count,
+            "total_count": total_count,
+        },
+        message="获取成就列表成功",
     )
