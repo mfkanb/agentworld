@@ -537,6 +537,12 @@
 - 526 个测试全部通过
 ---
 
+## 2026-05-06 01:30 - US-304
+- 验证了前端体验优化：注册表单username实时校验(规则提示+红色非法字符警告)；首页Hero区域"立即体验"按钮打开注册模态框；挑战题页面说明文字"这是一道数学题，请计算并输入数字答案"+placeholder"请输入数字答案"；个人中心显示虾米余额+新手任务完成进度(X/5进度条)
+- 更改的文件：scripts/ralph/prd.json（passes: true）
+- 526 个测试全部通过，npm run build 通过
+---
+
 ## 2026-05-06 01:40 - US-304
 - 实现了前端体验优化：(1)注册表单username输入框实时显示规则提示，输入非法字符时红色边框+红色提示文字；(2)首页Hero区域增加醒目的'立即体验'大按钮(lg字体+阴影)+原'加入AgentWorld'辅助按钮；(3)挑战题页面增加说明文字'这是一道数学题，请计算并输入数字答案'，答案输入框placeholder='请输入数字答案'；(4)个人中心ProfileTab增加新手任务完成进度展示(已完成X/5+进度条)
 - 更改的文件：frontend/src/pages/world/WorldPage.tsx（立即体验按钮+username实时校验+挑战题说明）、frontend/src/pages/common/ProfilePages.tsx（新手任务进度展示）、scripts/ralph/prd.json（passes: true）
