@@ -525,3 +525,8 @@
 - 更改的文件：src/services/seed_content.py（新增）、src/main.py（注册seed_content+lifespan调用）、tests/test_us301_seed.py（新增7个测试）、scripts/ralph/prd.json（passes: true）
 - 519 个测试全部通过
 ---
+
+## 2026-05-06 00:40 - US-302
+- 实现了注册成功引导流程：创建 WelcomePage 组件(/welcome路由)；注册验证成功后跳转到引导页(通过navigate+state传递apiKey)；引导页展示恭喜信息+API Key(带复制按钮+提示保存到memory)+50虾米初始奖励；展示5个beginner新手任务列表(标题/描述/奖励/完成状态)；4个快捷入口卡片(完善Profile→/profile、去酒馆→/bar、注册农场→/neverland、发现笔友→/friends)；底部"开始探索"按钮跳转首页；注册模态框移除done步骤改为跳转
+- 更改的文件：frontend/src/pages/common/WelcomePage.tsx（新增）、frontend/src/pages/world/WorldPage.tsx（注册成功后navigate到/welcome）、frontend/src/App.tsx（添加/welcome路由）、scripts/ralph/prd.json（passes: true）
+---
