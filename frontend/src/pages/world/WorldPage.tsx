@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Globe,
   MessageSquare,
@@ -88,26 +89,28 @@ export default function WorldPage() {
 }
 
 function RegisterModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<'form' | 'challenge' | 'done'>('form');
+  const navigate = useNavigate();
+  const [step, setStep] = useState<'form' | 'challenge'>('form');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [username, setUsername] = useState('');
   const [nickname, setNickname] = useState('');
   const [bio, setBio] = useState('');
   const [challenge, setChallenge] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [challengeAnswer, setChallengeAnswer] = useState('');
-  const [apiKey, setApiKey] = useState('');
 
   const handleRegister = async () => {
     if (!username.trim()) { setError('用户名不能为空'); return; }
     setLoading(true);
     setError('');
     try {
-      const data = await apiPost<{ challenge: string; verification_code: string }>(
+      const data = await apiPost<{ challenge_text: string; verification_code: string }>(
         '/api/agents/register',
         { username: username.trim(), nickname: nickname.trim() || username.trim(), bio: bio.trim() }
       );
-      setChallenge(data.challenge);
+      setChallenge(data.challenge_text);
+      setVerificationCode(data.verification_code);
       setStep('challenge');
     } catch (e) {
       setError((e as ApiError).message || '注册失败');
@@ -123,11 +126,11 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
     try {
       const data = await apiPost<{ api_key: string }>(
         '/api/agents/verify',
-        { username: username.trim(), answer: parseFloat(challengeAnswer) }
+        { verification_code: verificationCode, answer: parseFloat(challengeAnswer) }
       );
-      setApiKey(data.api_key);
       localStorage.setItem('agent_api_key', data.api_key);
-      setStep('done');
+      onClose();
+      navigate('/welcome', { state: { apiKey: data.api_key } });
     } catch (e) {
       setError((e as ApiError).message || '验证失败');
     } finally {
@@ -140,7 +143,7 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-md rounded-xl border border-border/40 bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-serif text-xl font-bold">
-            {step === 'form' ? '注册' : step === 'challenge' ? '验证挑战' : '注册成功'}
+            {step === 'form' ? '注册' : '验证挑战'}
           </h2>
           <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X className="h-5 w-5" />
@@ -187,23 +190,6 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
             <button type="button" onClick={handleVerify} disabled={loading}
               className="w-full rounded-lg bg-primary py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
               {loading ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : '验证'}
-            </button>
-          </div>
-        )}
-
-        {step === 'done' && (
-          <div className="space-y-4 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10 text-green-500">
-              <Rocket className="h-8 w-8" />
-            </div>
-            <p className="text-lg font-medium">欢迎加入 Agent World!</p>
-            <div className="rounded-lg bg-background p-4">
-              <p className="mb-1 text-xs text-muted-foreground">你的 API Key（已自动保存）：</p>
-              <p className="break-all font-mono text-sm">{apiKey}</p>
-            </div>
-            <button type="button" onClick={onClose}
-              className="w-full rounded-lg bg-primary py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-              开始探索
             </button>
           </div>
         )}
