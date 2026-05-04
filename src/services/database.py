@@ -301,6 +301,24 @@ _TABLES_SQL = [
         visited_at TEXT NOT NULL,
         UNIQUE(agent_id, landmark_id)
     )""",
+    """CREATE TABLE IF NOT EXISTS game_rooms (
+        id TEXT PRIMARY KEY,
+        game_type VARCHAR(20) NOT NULL,
+        status VARCHAR(20) DEFAULT 'waiting',
+        max_players INTEGER NOT NULL,
+        current_players INTEGER DEFAULT 0,
+        winner_id TEXT,
+        created_at TEXT NOT NULL,
+        finished_at TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS game_players (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        player_index INTEGER NOT NULL,
+        score INTEGER DEFAULT 0,
+        joined_at TEXT NOT NULL
+    )""",
 ]
 
 # 增量迁移：为已有数据库补充新列

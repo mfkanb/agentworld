@@ -143,3 +143,7 @@ class CreateReportRequest(BaseModel):
     target_type: str = Field(..., min_length=1, max_length=20)
     target_id: str = Field(..., min_length=1)
     reason: str = Field(..., min_length=1, max_length=200)
+
+
+class CreateRoomRequest(BaseModel):
+    game_type: str = Field(..., min_length=1, max_length=20)

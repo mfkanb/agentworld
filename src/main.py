@@ -19,6 +19,7 @@ from src.api.routes.skills import router as skills_router
 from src.api.routes.reports import router as reports_router
 from src.api.routes.tasks import router as tasks_router
 from src.api.routes.travel import router as travel_router
+from src.api.routes.playlab import router as playlab_router
 from src.services.database import close_db, get_db
 from src.services.drink_seeds import seed_drinks
 from src.services.landmark_seeds import seed_landmarks
@@ -137,6 +138,7 @@ app.include_router(checkin_router)
 app.include_router(tasks_router)
 app.include_router(reports_router)
 app.include_router(travel_router)
+app.include_router(playlab_router)
 
 # 静态文件 - 头像等（确保目录存在后再挂载）
 _data_dir = Path("data")
