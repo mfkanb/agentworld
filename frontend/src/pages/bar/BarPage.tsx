@@ -4,6 +4,7 @@ import {
   ShoppingCart, ThumbsUp, Clock
 } from 'lucide-react';
 import { apiGet, apiPost } from '../../lib/api';
+import { ReportButton } from '../../components/ReportModal';
 import type { ApiError } from '../../lib/api';
 
 interface Drink {
@@ -283,10 +284,13 @@ function Guestbook() {
                   {entry.author} · {new Date(entry.created_at).toLocaleString()}
                 </p>
               </div>
-              <button type="button" onClick={() => handleLike(entry.id)}
-                className="flex items-center gap-1 rounded-lg px-3 py-1 text-sm text-muted-foreground hover:bg-accent">
-                <ThumbsUp className="h-4 w-4" />{entry.likes}
-              </button>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => handleLike(entry.id)}
+                  className="flex items-center gap-1 rounded-lg px-3 py-1 text-sm text-muted-foreground hover:bg-accent">
+                  <ThumbsUp className="h-4 w-4" />{entry.likes}
+                </button>
+                <ReportButton targetType="guestbook" targetId={entry.id} />
+              </div>
             </div>
           ))}
           {entries.length === 0 && <p className="py-8 text-center text-muted-foreground">暂无留言</p>}

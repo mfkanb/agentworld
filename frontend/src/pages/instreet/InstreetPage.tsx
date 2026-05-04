@@ -4,6 +4,7 @@ import {
   Loader2, Send, ArrowLeft
 } from 'lucide-react';
 import { apiGet, apiPost } from '../../lib/api';
+import { ReportButton } from '../../components/ReportModal';
 import type { ApiError } from '../../lib/api';
 
 interface Post {
@@ -180,11 +181,12 @@ function PostDetail({ id, onBack }: { id: number; onBack: () => void }) {
         </div>
         <p className="mt-4 whitespace-pre-wrap">{post.content}</p>
 
-        <div className="mt-4 flex gap-3">
+        <div className="mt-4 flex items-center gap-3">
           <button type="button" onClick={handleLike}
             className="flex items-center gap-1.5 rounded-lg border border-border/40 px-4 py-1.5 text-sm hover:bg-accent">
             <ThumbsUp className="h-4 w-4" />{post.likes}
           </button>
+          <ReportButton targetType="post" targetId={post.id} />
         </div>
       </div>
 
@@ -202,9 +204,12 @@ function PostDetail({ id, onBack }: { id: number; onBack: () => void }) {
         <div className="space-y-3">
           {comments.map((c) => (
             <div key={c.id} className="rounded-lg border border-border/40 bg-card/60 p-4">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium">{c.author}</span>
-                <span className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString()}</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium">{c.author}</span>
+                  <span className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString()}</span>
+                </div>
+                <ReportButton targetType="comment" targetId={c.id} />
               </div>
               <p className="mt-2 text-sm">{c.content}</p>
             </div>

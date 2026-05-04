@@ -1,31 +1,38 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   UserCircle, Edit3, Save, Loader2, Coins, Star, Shield,
-  AlertTriangle, Send
+  AlertTriangle, Send, Download, Code
 } from 'lucide-react';
 import { apiGet, apiPut, apiPost } from '../../lib/api';
 import type { ApiError } from '../../lib/api';
 
+type TabType = 'profile' | 'skills' | 'downloads' | 'report';
+
 export default function ProfilePage() {
-  const [tab, setTab] = useState<'profile' | 'report'>('profile');
+  const [tab, setTab] = useState<TabType>('profile');
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <h1 className="font-serif text-3xl font-bold">个人中心</h1>
 
-      <div className="mt-6 flex gap-2">
-        <button type="button" onClick={() => setTab('profile')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium ${tab === 'profile' ? 'bg-primary text-primary-foreground' : 'bg-accent text-muted-foreground'}`}>
-          <UserCircle className="mr-1 inline h-4 w-4" />个人资料
-        </button>
-        <button type="button" onClick={() => setTab('report')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium ${tab === 'report' ? 'bg-primary text-primary-foreground' : 'bg-accent text-muted-foreground'}`}>
-          <Shield className="mr-1 inline h-4 w-4" />举报
-        </button>
+      <div className="mt-6 flex flex-wrap gap-2">
+        {([
+          { key: 'profile' as const, label: '个人资料', Icon: UserCircle },
+          { key: 'skills' as const, label: '我的技能', Icon: Code },
+          { key: 'downloads' as const, label: '我的下载', Icon: Download },
+          { key: 'report' as const, label: '举报', Icon: Shield },
+        ]).map(({ key, label, Icon }) => (
+          <button key={key} type="button" onClick={() => setTab(key)}
+            className={`rounded-lg px-4 py-1.5 text-sm font-medium ${tab === key ? 'bg-primary text-primary-foreground' : 'bg-accent text-muted-foreground'}`}>
+            <Icon className="mr-1 inline h-4 w-4" />{label}
+          </button>
+        ))}
       </div>
 
       <div className="mt-6">
         {tab === 'profile' && <ProfileTab />}
+        {tab === 'skills' && <MySkillsTab />}
+        {tab === 'downloads' && <MyDownloadsTab />}
         {tab === 'report' && <ReportTab />}
       </div>
     </div>
@@ -35,19 +42,36 @@ export default function ProfilePage() {
 /* ─── Profile ─── */
 function ProfileTab() {
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [bio, setBio] = useState('');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [nickname, setNickname] = useState('');
-  const [bio, setBio] = useState('');
+  const [editBio, setEditBio] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
   const fetchProfile = useCallback(async () => {
     try {
       const data = await apiGet('/api/auth/me');
-      setProfile(data as Record<string, unknown>);
-      setNickname(String((data as Record<string, unknown>).nickname || ''));
-      setBio(String((data as Record<string, unknown>).bio || ''));
+      const me = data as Record<string, unknown>;
+      setProfile(me);
+      setNickname(String(me.nickname || ''));
+      setEditBio(String(me.bio || ''));
+
+      // Fetch avatar_url and bio from profile endpoint
+      const username = String(me.username || '');
+      if (username) {
+        try {
+          const profileData = await apiGet(`/api/agents/profile/${username}`);
+          const p = profileData as Record<string, unknown>;
+          if (p.avatar_url) setAvatarUrl(String(p.avatar_url));
+          if (p.bio) {
+            setBio(String(p.bio));
+            setEditBio(String(p.bio));
+          }
+        } catch { /* ignore */ }
+      }
     } catch (e) {
       if ((e as ApiError).code === 'unauthorized' || (e as ApiError).code === 'auth_failed') {
         setMsg('请先在顶部输入 API Key');
@@ -64,7 +88,7 @@ function ProfileTab() {
     try {
       const payload: { nickname?: string; bio?: string } = {};
       if (nickname.trim()) payload.nickname = nickname.trim();
-      if (bio.trim()) payload.bio = bio.trim();
+      if (editBio.trim()) payload.bio = editBio.trim();
       await apiPut('/api/agents/profile', payload);
       setEditing(false);
       setMsg('保存成功');
@@ -87,19 +111,29 @@ function ProfileTab() {
     );
   }
 
+  const displayName = String(profile.nickname || profile.username || '用户');
+
   return (
     <div className="max-w-lg space-y-6">
       {/* Profile card */}
       <div className="rounded-lg border border-border/40 bg-card/60 p-6">
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-2xl font-bold">
-            {String(profile.nickname || profile.username || '?')[0]}
-          </div>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={displayName} className="h-16 w-16 rounded-full object-cover" />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-2xl font-bold">
+              {displayName[0]}
+            </div>
+          )}
           <div>
-            <h2 className="font-serif text-xl font-bold">{String(profile.nickname || profile.username || '用户')}</h2>
+            <h2 className="font-serif text-xl font-bold">{displayName}</h2>
             <p className="text-sm text-muted-foreground">@{String(profile.username || '')}</p>
           </div>
         </div>
+
+        {bio && (
+          <p className="mt-4 text-sm text-muted-foreground">{bio}</p>
+        )}
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-accent p-3 text-center">
@@ -135,7 +169,7 @@ function ProfileTab() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">简介</label>
-              <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3}
+              <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} rows={3}
                 className="w-full rounded-lg border border-border/40 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
             </div>
             <div className="flex gap-2">
@@ -149,11 +183,109 @@ function ProfileTab() {
         ) : (
           <div className="space-y-3">
             <div><span className="text-sm text-muted-foreground">昵称：</span>{String(profile.nickname || '未设置')}</div>
-            <div><span className="text-sm text-muted-foreground">简介：</span>{String(profile.bio || '未设置')}</div>
+            <div><span className="text-sm text-muted-foreground">简介：</span>{bio || String(profile.bio || '未设置')}</div>
           </div>
         )}
         {msg && <p className={`mt-3 text-sm ${msg.includes('成功') ? 'text-green-500' : 'text-red-500'}`}>{msg}</p>}
       </div>
+    </div>
+  );
+}
+
+/* ─── My Skills ─── */
+function MySkillsTab() {
+  const [skills, setSkills] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiGet<{ items: Record<string, unknown>[] }>('/api/me/skills?limit=50');
+        setSkills(data.items || []);
+      } catch (e) {
+        if ((e as ApiError).code === 'unauthorized' || (e as ApiError).code === 'auth_failed') {
+          setMsg('请先在顶部输入 API Key');
+        }
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+  if (msg) return <p className="py-12 text-center text-muted-foreground">{msg}</p>;
+
+  if (skills.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <Code className="mx-auto h-10 w-10 text-muted-foreground" />
+        <p className="mt-3 text-muted-foreground">还没有发布过技能</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {skills.map((skill) => (
+        <div key={String(skill.id)} className="rounded-lg border border-border/40 bg-card/60 p-4">
+          <div className="flex items-start justify-between">
+            <h3 className="font-semibold">{String(skill.name || '')}</h3>
+            {skill.category ? <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs text-muted-foreground">{String(skill.category)}</span> : null}
+          </div>
+          {skill.description ? <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{String(skill.description)}</p> : null}
+          <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <span><Download className="mr-1 inline h-3 w-3" />{String(skill.downloads ?? 0)}</span>
+            <span><Star className="mr-1 inline h-3 w-3" />{String(skill.rating ?? 0)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── My Downloads ─── */
+function MyDownloadsTab() {
+  const [downloads, setDownloads] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiGet<{ items: Record<string, unknown>[] }>('/api/me/downloads?limit=50');
+        setDownloads(data.items || []);
+      } catch (e) {
+        if ((e as ApiError).code === 'unauthorized' || (e as ApiError).code === 'auth_failed') {
+          setMsg('请先在顶部输入 API Key');
+        }
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+  if (msg) return <p className="py-12 text-center text-muted-foreground">{msg}</p>;
+
+  if (downloads.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <Download className="mx-auto h-10 w-10 text-muted-foreground" />
+        <p className="mt-3 text-muted-foreground">还没有下载过技能</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {downloads.map((dl, i) => (
+        <div key={i} className="rounded-lg border border-border/40 bg-card/60 p-4">
+          <div className="flex items-start justify-between">
+            <h3 className="font-semibold">{String(dl.name || '未知技能')}</h3>
+            <span className="text-xs text-muted-foreground">{dl.created_at ? new Date(String(dl.created_at)).toLocaleDateString() : ''}</span>
+          </div>
+          {dl.description ? <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{String(dl.description)}</p> : null}
+        </div>
+      ))}
     </div>
   );
 }
