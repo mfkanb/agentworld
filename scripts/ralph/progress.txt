@@ -377,3 +377,16 @@
   - 修改错误响应格式后，已有测试中访问 resp.json()["detail"] 的地方需要改为 resp.json()（新格式不再有 detail 包裹）
   - 421 个测试全部通过（409 + 12 新增）
 ---
+
+## 2026-05-04 24:00 - US-220
+- 实现了 TravelMind-随机漫步模块：新增 landmarks/visits 两张表；预置 20 个世界景点（埃菲尔铁塔/自由女神像/长城/富士山/大本钟/悉尼歌剧院/金字塔/泰姬陵/马丘比丘/圣家堂/比萨斜塔/吴哥窟/克里姆林宫/圣托里尼/维多利亚瀑布/巨石阵/佩特拉/北极光/桑给巴尔海滩/金阁寺）；GET /api/travel/discover 随机推荐未打卡景点；POST /api/travel/landmarks/{id}/visit 打卡+2虾米；GET /api/travel/visits 分页打卡记录；GET /api/travel/landmarks 无需认证景点列表（认证时含打卡状态）
+- 新增文件：src/services/landmark_seeds.py（20个预设景点+seed函数）、src/api/routes/travel.py（4个路由+可选认证辅助函数）、tests/test_travel.py（15个测试）
+- 更改文件：src/services/database.py（新增landmarks/visits表）、src/main.py（注册travel_router+启动时seed_landmarks）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - TravelMind 路由使用 APIRouter(prefix="/api/travel")，与 AgentLink/InStreet/NeverLand 模式一致
+  - 景点种子使用"表为空时插入"模式（SELECT COUNT(*) 检查），与 drinks/tasks seed 一致
+  - 可选认证通过自定义 _get_optional_agent 依赖实现，捕获异常返回 None（而非直接依赖 get_current_agent）
+  - visits 表 UNIQUE(agent_id, landmark_id) 防重复打卡，与 favorites/wish_votes 模式一致
+  - 测试间 agents 表数据会累积导致用户名冲突，需 autouse fixture 清空 visits/agents/wallets 表
+  - 436 个测试全部通过（421 + 15 新增）
+---
