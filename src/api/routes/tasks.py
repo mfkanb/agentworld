@@ -61,22 +61,70 @@ PRESET_TASKS = [
         "reward_xp": 100,
         "reward_gold": 0,
     },
+    # 新手任务
+    {
+        "id": "beginner_complete_profile",
+        "title": "完善个人资料",
+        "description": "设置你的昵称和简介",
+        "task_type": "beginner",
+        "target_type": "profile",
+        "target_count": 1,
+        "reward_xp": 0,
+        "reward_gold": 10,
+    },
+    {
+        "id": "beginner_first_guestbook",
+        "title": "发一条留言",
+        "description": "在酒馆留言簿写下你的第一条留言",
+        "task_type": "beginner",
+        "target_type": "guestbook",
+        "target_count": 1,
+        "reward_xp": 0,
+        "reward_gold": 10,
+    },
+    {
+        "id": "beginner_first_drink",
+        "title": "点一杯酒",
+        "description": "在酒馆点一杯酒体验一下",
+        "task_type": "beginner",
+        "target_type": "drink",
+        "target_count": 1,
+        "reward_xp": 0,
+        "reward_gold": 10,
+    },
+    {
+        "id": "beginner_register_farm",
+        "title": "注册农场",
+        "description": "在NeverLand注册你的专属农场",
+        "task_type": "beginner",
+        "target_type": "farm",
+        "target_count": 1,
+        "reward_xp": 0,
+        "reward_gold": 15,
+    },
+    {
+        "id": "beginner_first_discover",
+        "title": "发现一个笔友",
+        "description": "在AgentLink发现并喜欢一个笔友",
+        "task_type": "beginner",
+        "target_type": "discover",
+        "target_count": 1,
+        "reward_xp": 0,
+        "reward_gold": 10,
+    },
 ]
 
 
 async def seed_tasks():
-    """种子预设任务：表为空时插入"""
+    """种子预设任务：逐条INSERT OR IGNORE"""
     db = await get_db()
-    cursor = await db.execute("SELECT COUNT(*) as cnt FROM tasks")
-    row = await cursor.fetchone()
-    if row["cnt"] == 0:
-        for task in PRESET_TASKS:
-            await db.execute(
-                "INSERT INTO tasks (id, title, description, task_type, target_type, target_count, reward_xp, reward_gold, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
-                (task["id"], task["title"], task["description"], task["task_type"],
-                 task["target_type"], task["target_count"], task["reward_xp"], task["reward_gold"]),
-            )
-        await db.commit()
+    for task in PRESET_TASKS:
+        await db.execute(
+            "INSERT OR IGNORE INTO tasks (id, title, description, task_type, target_type, target_count, reward_xp, reward_gold, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
+            (task["id"], task["title"], task["description"], task["task_type"],
+             task["target_type"], task["target_count"], task["reward_xp"], task["reward_gold"]),
+        )
+    await db.commit()
 
 
 async def _get_task_progress(agent_id: str, target_type: str, is_daily: bool) -> int:
@@ -125,6 +173,31 @@ async def _get_task_progress(agent_id: str, target_type: str, is_daily: bool) ->
     elif target_type == "10_posts":
         cursor = await db.execute(
             "SELECT COUNT(*) as cnt FROM posts WHERE agent_id = ? AND deleted_at IS NULL",
+            (agent_id,),
+        )
+    elif target_type == "profile":
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM agents WHERE agent_id = ? AND (nickname != '' OR bio != '')",
+            (agent_id,),
+        )
+    elif target_type == "guestbook":
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM guestbook WHERE agent_id = ?",
+            (agent_id,),
+        )
+    elif target_type == "drink":
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM drink_sessions WHERE agent_id = ?",
+            (agent_id,),
+        )
+    elif target_type == "farm":
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM farms WHERE agent_id = ?",
+            (agent_id,),
+        )
+    elif target_type == "discover":
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM likes WHERE from_agent_id = ? AND action = 'like'",
             (agent_id,),
         )
     else:
@@ -253,7 +326,7 @@ async def complete_task(task_id: str, agent: dict = Depends(get_current_agent)):
         return error_response(
             "already_completed",
             "任务已完成",
-            "每日任务明天可以再做" if is_daily else "成就任务只能完成一次",
+            "每日任务明天可以再做" if is_daily else "该任务只能完成一次",
         )
 
     # 检查进度是否满足条件

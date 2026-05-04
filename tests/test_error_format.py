@@ -84,8 +84,11 @@ async def test_insufficient_funds_error_format(client: AsyncClient):
     )
     await db.commit()
 
-    # 余额为 0 的用户下载
-    _, poor_key = await _create_active_agent(client, "pooruser_fund")
+    # 余额为 0 的用户下载 (drain the initial 50 from verify)
+    poor_id, poor_key = await _create_active_agent(client, "pooruser_fund")
+    db2 = await get_db()
+    await db2.execute("UPDATE wallets SET balance = 0 WHERE agent_id = ?", (poor_id,))
+    await db2.commit()
     resp = await client.get(
         f"/api/skills/{skill_id}/download",
         headers={"agent-auth-api-key": poor_key},

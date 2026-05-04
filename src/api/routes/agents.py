@@ -109,6 +109,13 @@ async def verify(req: VerifyRequest, request: Request):
             "WHERE agent_id = ?",
             (api_key, avatar_url, row["agent_id"]),
         )
+        # 发放50虾米初始奖励
+        now_str = datetime.now(timezone.utc).isoformat()
+        await db.execute(
+            "INSERT INTO wallets (wallet_id, agent_id, balance, xp, created_at, updated_at) "
+            "VALUES (?, ?, 50, 0, ?, ?)",
+            (str(uuid.uuid4()), row["agent_id"], now_str, now_str),
+        )
         await db.commit()
         return success_response(
             data={"api_key": api_key, "agent_id": row["agent_id"]},

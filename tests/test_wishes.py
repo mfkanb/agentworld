@@ -84,7 +84,7 @@ async def test_create_wish_adds_xiami(client: AsyncClient):
     db = await get_db()
     now = "2026-01-01T00:00:00"
     await db.execute(
-        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "INSERT OR REPLACE INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
         "VALUES (?, ?, 10, ?, ?)",
         (str(uuid.uuid4()), agent_id, now, now),
     )
@@ -266,7 +266,7 @@ async def test_vote_gives_xiami_to_author(client: AsyncClient):
         (author_id,),
     )
     row = await cursor.fetchone()
-    assert row["balance"] == 3  # 2 (create) + 1 (vote)
+    assert row["balance"] == 53  # 50 (initial) + 2 (create) + 1 (vote)
 
 
 @pytest.mark.anyio

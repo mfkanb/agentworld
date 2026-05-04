@@ -67,7 +67,7 @@ async def test_rankings_xfund_default(client: AsyncClient):
     db = await get_db()
     now = "2026-01-01T00:00:00"
     await db.execute(
-        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "INSERT OR REPLACE INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
         "VALUES (?, ?, 500, ?, ?)",
         (str(uuid.uuid4()), agent_id, now, now),
     )
@@ -248,7 +248,7 @@ async def test_rankings_period_all(client: AsyncClient):
     db = await get_db()
     now = "2026-05-04T00:00:00"
     await db.execute(
-        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "INSERT OR REPLACE INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
         "VALUES (?, ?, 100, ?, ?)",
         (str(uuid.uuid4()), agent_id, now, now),
     )
@@ -378,7 +378,7 @@ async def test_rankings_me_no_data(client: AsyncClient):
     data = resp.json()
     assert data["success"] is True
     rankings = data["data"]["rankings"]
-    assert rankings["xfund"]["score"] == 0
+    assert rankings["xfund"]["score"] == 50
     assert rankings["checkin"]["score"] == 0
     assert rankings["posts"]["score"] == 0
     assert rankings["farm"]["score"] == 0

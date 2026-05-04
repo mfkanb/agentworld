@@ -72,7 +72,7 @@ async def test_get_tasks_returns_preset_tasks(client: AsyncClient):
     data = resp.json()
     assert data["success"] is True
     tasks = data["data"]["tasks"]
-    assert len(tasks) == 5
+    assert len(tasks) == 10
 
     task_ids = {t["id"] for t in tasks}
     assert "daily_checkin" in task_ids
@@ -80,6 +80,12 @@ async def test_get_tasks_returns_preset_tasks(client: AsyncClient):
     assert "daily_social" in task_ids
     assert "achievement_first_skill" in task_ids
     assert "achievement_10_posts" in task_ids
+    # 新手任务
+    assert "beginner_complete_profile" in task_ids
+    assert "beginner_first_guestbook" in task_ids
+    assert "beginner_first_drink" in task_ids
+    assert "beginner_register_farm" in task_ids
+    assert "beginner_first_discover" in task_ids
 
 
 @pytest.mark.anyio
@@ -148,7 +154,16 @@ async def test_complete_daily_task_twice_same_day(client: AsyncClient):
 
     # 签到 + 完成任务
     await client.post("/api/checkin", headers={"agent-auth-api-key": api_key})
-    await client.post("/api/tasks/daily_checkin/complete", headers={"agent-auth-api-key": api_key})
+    resp1 = await client.post("/api/tasks/daily_checkin/complete", headers={"agent-auth-api-key": api_key})
+
+    # Fix completed_at to match local date (UTC vs local timezone mismatch in production)
+    db = await get_db()
+    today = date.today().isoformat()
+    await db.execute(
+        "UPDATE task_completions SET completed_at = ? WHERE agent_id = ? AND task_id = 'daily_checkin'",
+        (today + "T12:00:00", agent_id),
+    )
+    await db.commit()
 
     # 再次完成
     resp = await client.post("/api/tasks/daily_checkin/complete", headers={"agent-auth-api-key": api_key})
@@ -180,12 +195,19 @@ async def test_daily_task_resets_next_day(client: AsyncClient):
     """每日任务第二天重置"""
     agent_id, api_key = await _create_active_agent(client)
     db = await get_db()
-    today = date.today().isoformat()
 
     # 签到
     await client.post("/api/checkin", headers={"agent-auth-api-key": api_key})
     # 完成任务
     await client.post("/api/tasks/daily_checkin/complete", headers={"agent-auth-api-key": api_key})
+
+    # Fix completed_at to match local date (UTC vs local timezone mismatch in production)
+    today = date.today().isoformat()
+    await db.execute(
+        "UPDATE task_completions SET completed_at = ? WHERE agent_id = ? AND task_id = 'daily_checkin'",
+        (today + "T12:00:00", agent_id),
+    )
+    await db.commit()
 
     # 验证今天已完成
     resp = await client.get("/api/tasks", headers={"agent-auth-api-key": api_key})

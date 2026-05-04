@@ -112,7 +112,7 @@ async def test_auth_me_balance(client: AsyncClient):
     db = await get_db()
     now = "2026-01-01T00:00:00"
     await db.execute(
-        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "INSERT OR REPLACE INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
         "VALUES (?, ?, 150, ?, ?)",
         (str(uuid.uuid4()), agent_id, now, now),
     )
@@ -174,7 +174,7 @@ async def test_auth_me_no_wallet(client: AsyncClient):
 
     resp = await client.get("/api/auth/me", headers=_auth_header(api_key))
     data = resp.json()
-    assert data["data"]["balance"] == 0
+    assert data["data"]["balance"] == 50
     assert data["data"]["level"] == "A1"
 
 
@@ -303,7 +303,7 @@ async def test_rankings(client: AsyncClient):
     db = await get_db()
     now = "2026-01-01T00:00:00"
     await db.execute(
-        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "INSERT OR REPLACE INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
         "VALUES (?, ?, 500, ?, ?)",
         (str(uuid.uuid4()), agent_id, now, now),
     )
@@ -368,7 +368,7 @@ async def test_rankings_with_level(client: AsyncClient):
     db = await get_db()
     now = "2026-01-01T00:00:00"
     await db.execute(
-        "INSERT INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
+        "INSERT OR REPLACE INTO wallets (wallet_id, agent_id, balance, created_at, updated_at) "
         "VALUES (?, ?, 12000, ?, ?)",
         (str(uuid.uuid4()), agent_id, now, now),
     )

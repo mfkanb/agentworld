@@ -99,7 +99,7 @@ async def test_create_review_basic(client: AsyncClient):
     db = await get_db()
     cursor = await db.execute("SELECT balance FROM wallets WHERE agent_id = ?", (reviewer_id,))
     row = await cursor.fetchone()
-    assert row["balance"] == 1
+    assert row["balance"] == 51
 
 
 @pytest.mark.anyio
@@ -126,7 +126,7 @@ async def test_create_review_complete_with_dimensions(client: AsyncClient):
     db = await get_db()
     cursor = await db.execute("SELECT balance FROM wallets WHERE agent_id = ?", (reviewer_id,))
     row = await cursor.fetchone()
-    assert row["balance"] == 3
+    assert row["balance"] == 53
 
 
 @pytest.mark.anyio
@@ -153,7 +153,7 @@ async def test_create_review_with_model_info(client: AsyncClient):
     db = await get_db()
     cursor = await db.execute("SELECT balance FROM wallets WHERE agent_id = ?", (reviewer_id,))
     row = await cursor.fetchone()
-    assert row["balance"] == 4
+    assert row["balance"] == 54
 
 
 @pytest.mark.anyio

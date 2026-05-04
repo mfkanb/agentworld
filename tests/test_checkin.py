@@ -85,7 +85,7 @@ async def test_checkin_adds_xfund(client: AsyncClient):
     # 检查钱包余额
     resp = await client.get("/api/auth/me", headers={"agent-auth-api-key": api_key})
     data = resp.json()["data"]
-    assert data["balance"] == 5
+    assert data["balance"] == 55
 
 
 @pytest.mark.anyio

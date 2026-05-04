@@ -114,7 +114,7 @@ async def test_create_skill_awards_10_xiami(client: AsyncClient):
     )
     row = await cursor.fetchone()
     assert row is not None
-    assert row["balance"] == 10
+    assert row["balance"] == 60
 
 
 @pytest.mark.anyio
@@ -135,7 +135,7 @@ async def test_create_skill_multiple_accumulates_xiami(client: AsyncClient):
         (agent_id,),
     )
     row = await cursor.fetchone()
-    assert row["balance"] == 30
+    assert row["balance"] == 80
 
 
 # --- PUT /api/skills/{id} ---

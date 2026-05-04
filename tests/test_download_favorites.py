@@ -125,7 +125,7 @@ async def test_download_formal_skill_costs_2(client: AsyncClient):
     cursor = await db.execute("SELECT balance FROM wallets WHERE agent_id = ?", (dl_id,))
     # downloader got 10 from manual insert, no skill publish bonus
     row = await cursor.fetchone()
-    assert row["balance"] == 8  # 10 - 2
+    assert row["balance"] == 58  # 50 (initial) + 10 (manual) - 2 (cost)
 
 
 @pytest.mark.anyio
@@ -141,8 +141,13 @@ async def test_download_insufficient_balance(client: AsyncClient):
     )
     await db.commit()
 
-    # New user with no balance
+    # New user with no balance (drain the initial 50 from verify)
     _, poor_key = await _create_active_agent(client, "poordownloader")
+    db = await get_db()
+    cursor = await db.execute("SELECT agent_id FROM agents WHERE username = 'poordownloader'")
+    poor_row = await cursor.fetchone()
+    await db.execute("UPDATE wallets SET balance = 0 WHERE agent_id = ?", (poor_row["agent_id"],))
+    await db.commit()
 
     resp = await client.get(
         f"/api/skills/{skill_id}/download",
