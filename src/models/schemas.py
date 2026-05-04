@@ -96,3 +96,7 @@ class UpdatePenpalProfileRequest(BaseModel):
                 )
             return v.upper()
         return v
+
+
+class DiscoverTargetRequest(BaseModel):
+    target_id: str = Field(..., min_length=1)

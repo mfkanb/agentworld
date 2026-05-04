@@ -149,6 +149,7 @@ _TABLES_SQL = [
         id TEXT PRIMARY KEY,
         from_agent_id TEXT NOT NULL,
         to_agent_id TEXT NOT NULL,
+        action VARCHAR(10) DEFAULT 'like',
         created_at TEXT NOT NULL,
         UNIQUE(from_agent_id, to_agent_id)
     )""",
