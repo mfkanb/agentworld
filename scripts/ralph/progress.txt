@@ -480,3 +480,28 @@
   - 未使用的 import 在 noUnusedLocals: true 下会报错，需清理
   - 许愿墙 API 路径是 /api/wishes，不是 //api/wishes（代码中有双斜线需注意）
 ---
+
+## 2026-05-05 10:00 - FE-060
+- 实现了NeverLand农场养成完整页面：农场概况（等级/金币/XP/声誉）、农田网格（种植/浇水/收获模态框选作物）、作物列表、建筑列表（已建+可建造）、动物管理（已购动物+可购买动物+收集产品按钮+24h冷却提示）、成就面板、社交面板（偷窃/赠送）
+- 后端修复：GET /farm 返回动物的 id 和 last_collected_at 字段（原来只有 animal_type 和 name，无法调用 collect 接口）
+- 修复 SocialPanel 偷窃/赠送共享同一个 target state 的 bug，改为独立 state
+- 修复 PlaylabPage 未使用的 Gamepad2/Swords/Circle 导入和 unknown 类型条件渲染
+- 更改的文件：frontend/src/pages/neverland/NeverlandPage.tsx（重写）、src/api/routes/neverland.py（动物查询加 id/last_collected_at）、frontend/src/pages/playlab/PlaylabPage.tsx（修复 TS 错误）
+- **未来迭代的学习：**
+  - 后端 GET /farm 概览返回的动物数据需包含 id，否则前端无法调用 POST /farm/animals/{id}/collect
+  - SocialPanel 等包含多个独立操作的面板，每个操作应有独立 state，避免互相干扰
+  - BuildingList 改为从父组件传入 buildings prop（已从 farm 数据获取），避免重复 API 调用
+  - 动物收集产品有 24h 冷却，通过 last_collected_at + 24h 判断按钮状态
+  - PlaylabPage 的 pre-existing TS 错误（未用导入 + unknown 条件渲染）需要一并修复才能 build
+---
+
+## 2026-05-05 10:30 - FE-090/100
+- 实现了 PlayLab 桌游对战页面：游戏大厅（创建房间选gomoku/poker/werewolf+等待中房间列表+加入按钮）、五子棋（15x15棋盘网格+黑白子+落子+3s自动刷新）、德州扑克（公共牌+底牌+跟注/加注/弃牌/全押按钮+底池）、谁是卧底（我的词+描述+投票选择+存活玩家列表）；实现了举报与个人中心页面：Profile展示（头像/昵称/虾米余额/等级）+编辑Profile（修改nickname/bio）+举报功能（选类型+填ID+原因）+举报记录列表
+- 更改的文件：frontend/src/pages/playlab/PlaylabPage.tsx（重写为完整桌游页面含4个子组件）、frontend/src/pages/common/ProfilePages.tsx（新增个人中心+举报页面）、frontend/src/App.tsx（添加/profile路由）、scripts/ralph/prd.json（FE-090/100 passes: true）
+- **未来迭代的学习：**
+  - PlayLab 游戏状态轮询使用 useEffect + setInterval(3s) 自动刷新 playing 状态的房间
+  - 游戏结束展示 Trophy SVG 组件（内联 SVG，非 lucide-react 导入）
+  - Record<string, unknown> 类型的 unknown 字段在 JSX 中需要用 `{"text" + String(val)}` 模式避免 ReactNode 类型错误
+  - 全部 11 个前端 story (FE-001 到 FE-100) 已完成，npm run build 通过
+---
+
