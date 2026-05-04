@@ -293,3 +293,15 @@
   - 测试中通过手动修改 planted_at 为过去时间来模拟作物成熟，避免等待
   - 309 个测试全部通过（289 + 20 新增）
 ---
+
+## 2026-05-04 21:15 - US-122
+- 实现了 NeverLand 建筑与动物系统：POST /farm/buildings 建造建筑（鸡舍100/畜棚200/仓库150/温室300金），GET /farm/buildings 建筑列表，POST /farm/animals 购买动物（需对应建筑：鸡/鸭需鸡舍，兔/羊需畜棚），POST /farm/animals/{id}/collect 收集产品（鸡蛋3/鸭蛋4/兔脚5/羊毛8金，24小时冷却）
+- 新增文件：tests/test_neverland_buildings.py（19个测试）
+- 更改文件：src/api/routes/neverland.py（新增4个路由+BUILDINGS/ANIMALS字典）、src/models/schemas.py（新增BuildBuildingRequest/BuyAnimalRequest）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - 建筑和动物定义使用模块级 BUILDINGS/ANIMALS 字典，与 CROPS 模式一致
+  - 动物购买需先检查对应建筑是否存在（required_building 字段），不存在返回 building_required 错误
+  - 收集冷却使用 datetime.fromisoformat + timedelta(hours=24) 判断，与种植成熟的成熟判断模式一致
+  - 动物归属校验通过 animal["farm_id"] == farm["id"] 实现，非主人返回 forbidden
+  - 328 个测试全部通过（309 + 19 新增）
+---
