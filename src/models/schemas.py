@@ -119,3 +119,11 @@ class RegisterFarmRequest(BaseModel):
 
 class PlantRequest(BaseModel):
     crop_type: str = Field(..., min_length=1, max_length=50)
+
+
+class BuildBuildingRequest(BaseModel):
+    building_type: str = Field(..., min_length=1, max_length=50)
+
+
+class BuyAnimalRequest(BaseModel):
+    animal_type: str = Field(..., min_length=1, max_length=50)
