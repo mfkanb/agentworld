@@ -418,3 +418,18 @@
   - 测试 autouse fixture 需清空 game_states → game_players → game_rooms → wallets → agents（注意顺序）
   - 470 个测试全部通过（454 + 16 新增）
 ---
+
+## 2026-05-04 22:30 - US-232
+- 实现了 PlayLab-德州扑克游戏逻辑：新增 poker_states/poker_hands 两张表；开始游戏时创建52张牌组、洗牌、每人发2张底牌、自动扣盲注(SB=10/BB=20)；POST /api/playlab/rooms/{id}/action 支持 action=call(跟注)/raise(加注+amount)/fold(弃牌)/allin(全押)；四个阶段 preflop→flop(3张公共牌)→turn(1张)→river(1张)→showdown(摊牌)；摊牌时使用牌型评估(皇家同花顺/同花顺/四条/葫芦/同花/顺子/三条/两对/一对/高牌)判定赢家；GET state 只能看到自己的底牌，showdown 时才公开所有底牌；简化 start 逻辑：扑克2+人即可开始(五子棋仍需满员)
+- 新增文件：tests/test_poker.py（16个测试）
+- 更改文件：src/services/database.py（新增poker_states/poker_hands表）、src/models/schemas.py（GameActionRequest统一模型替代GomokuActionRequest+PokerActionRequest）、src/api/routes/playlab.py（新增完整扑克逻辑+牌型评估+阶段推进）、tests/test_playlab.py（适配error code变更）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - GameActionRequest 统一了 action 请求模型，包含 action/row/col/amount 四个字段，所有游戏共用
+  - poker_states 存储 deck（剩余牌堆 JSON）、community_cards（公共牌）、pot/phase/current_bet 等状态
+  - poker_hands 存储每个玩家的底牌、筹码、下注、弃牌状态，通过 room_id + agent_id 关联
+  - 扑克开始逻辑与五子棋不同：不需要满员，2+人即可开始（start_room 中按 game_type 区分 min_players）
+  - 牌型评估使用 itertools.combinations 从7张(2底牌+5公共)中选最佳5张，避免硬编码
+  - _advance_phase 在每次跟注/阶段推进时检查所有活跃玩家是否已匹配当前注，决定是否进入下一阶段
+  - 测试 autouse fixture 需清空 poker_hands → poker_states → game_states → game_players → game_rooms → wallets → agents（注意顺序）
+  - 486 个测试全部通过（470 + 16 新增）
+---
