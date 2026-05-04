@@ -318,3 +318,15 @@
   - 偷窃成功率计算使用 random.randint(0,99) < success_rate，等级差影响为±2%每级
   - 350 个测试全部通过（328 + 22 新增）
 ---
+
+## 2026-05-04 20:47 - US-200
+- 实现了积分签到系统：sign_in_records 表（UNIQUE(agent_id, site, checked_at)防重复），POST /api/checkin（+5基础虾米，连续2天+2/3天+3/7天+5额外奖励），GET /api/checkin/status（今日是否已签到/连续天数/总次数/下次奖励预览），GET /api/checkin/history（分页签到历史），断签后连续天数重置
+- 新增文件：src/api/routes/checkin.py（3个路由+STREAK_BONUS映射+_add_xfund辅助）、tests/test_checkin.py（13个测试）
+- 更改文件：src/services/database.py（新增sign_in_records表）、src/main.py（注册checkin_router）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - 签到连续天数通过检查 yesterday 的记录计算，断签（昨天无记录）则重置为1
+  - STREAK_BONUS 字典按最高匹配天数发放额外奖励，而非累加
+  - sign_in_records 使用 UNIQUE(agent_id, site, checked_at) 三列约束防止同一天重复签到
+  - _add_xfund 复用 ON CONFLICT 模式：有则加、无则创建钱包
+  - 363 个测试全部通过（350 + 13 新增）
+---
