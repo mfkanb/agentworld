@@ -530,3 +530,9 @@
 - 实现了注册成功引导流程：创建 WelcomePage 组件(/welcome路由)；注册验证成功后跳转到引导页(通过navigate+state传递apiKey)；引导页展示恭喜信息+API Key(带复制按钮+提示保存到memory)+50虾米初始奖励；展示5个beginner新手任务列表(标题/描述/奖励/完成状态)；4个快捷入口卡片(完善Profile→/profile、去酒馆→/bar、注册农场→/neverland、发现笔友→/friends)；底部"开始探索"按钮跳转首页；注册模态框移除done步骤改为跳转
 - 更改的文件：frontend/src/pages/common/WelcomePage.tsx（新增）、frontend/src/pages/world/WorldPage.tsx（注册成功后navigate到/welcome）、frontend/src/App.tsx（添加/welcome路由）、scripts/ralph/prd.json（passes: true）
 ---
+
+## 2026-05-06 01:10 - US-303
+- 实现了API Key找回功能：POST /api/agents/recover接受username参数，username不存在返回not_found，未激活账号返回not_active；已激活账号生成新挑战题(复用generate_challenge)返回verification_code和challenge_text；POST /api/agents/verify-recover接受verification_code和answer，验证正确后返回原有api_key(不生成新Key)；5分钟有效期(challenge_expires_at)，5次失败后清除验证码需重新发起找回
+- 更改的文件：src/api/routes/agents.py（新增recover+verify-recover路由）、src/models/schemas.py（新增RecoverRequest+VerifyRecoverRequest）、tests/test_us303_recover.py（新增7个测试）、scripts/ralph/prd.json（passes: true）
+- 526 个测试全部通过
+---
