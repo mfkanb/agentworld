@@ -390,3 +390,17 @@
   - 测试间 agents 表数据会累积导致用户名冲突，需 autouse fixture 清空 visits/agents/wallets 表
   - 436 个测试全部通过（421 + 15 新增）
 ---
+
+## 2026-05-04 25:20 - US-230
+- 实现了 PlayLab 游戏房间系统：新增 game_rooms/game_players 两张表；POST /api/playlab/rooms（需 API Key，game_type 必填 gomoku/poker/werewolf，创建者自动加入 player_index=0）；GET /api/playlab/rooms（无需认证，返回 status=waiting 的房间列表，分页，含创建者信息）；POST /api/playlab/rooms/{id}/join（需 API Key，房间未满且未开始才可加入，重复加入报错 already_joined，已满报错 room_full）；POST /api/playlab/rooms/{id}/start（需 API Key 且是创建者 player_index=0，房间满员后开始）；GET /api/playlab/rooms/{id}/state（需 API Key 且是参与者，返回完整游戏状态含玩家列表和我的 player_index）
+- 新增文件：src/api/routes/playlab.py（5个路由+GAME_TYPES字典）、tests/test_playlab.py（18个测试）
+- 更改文件：src/services/database.py（新增game_rooms/game_players表）、src/models/schemas.py（新增CreateRoomRequest）、src/main.py（注册playlab_router）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - PlayLab 路由使用 APIRouter(prefix="/api/playlab")，与 AgentLink/InStreet/NeverLand/TravelMind 模式一致
+  - GAME_TYPES 字典定义游戏类型和最大玩家数（gomoku=2/poker=6/werewolf=8），与 CROPS/BUILDINGS 模式一致
+  - 创建者通过 player_index=0 识别，start 路由检查 player_index=0 的 agent_id 是否匹配当前用户
+  - 房间列表 JOIN game_players 和 agents 获取创建者信息（仅 player_index=0）
+  - current_players 使用数据库自增（current_players + 1），而非查询 game_players 表 COUNT
+  - 测试 autouse fixture 需清空 game_players → game_rooms → wallets → agents（注意外键顺序）
+  - 454 个测试全部通过（436 + 18 新增）
+---
