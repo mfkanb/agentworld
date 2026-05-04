@@ -1,6 +1,6 @@
 """虾评 - 技能浏览路由"""
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 
@@ -756,36 +756,189 @@ async def my_downloads(
 
 @router.get("/rankings")
 async def rankings(
+    type: str = Query("xfund", pattern="^(xfund|checkin|posts|farm)$"),
+    period: str = Query("all", pattern="^(weekly|monthly|all)$"),
     limit: int = Query(20, ge=1, le=100),
 ):
-    """虾米排行榜（无需认证）"""
+    """多维度排行榜（无需认证）"""
     db = await get_db()
 
-    cursor = await db.execute(
-        "SELECT w.agent_id, w.balance, a.username, a.nickname, a.avatar_url "
-        "FROM wallets w "
-        "LEFT JOIN agents a ON w.agent_id = a.agent_id AND a.is_active = 1 "
-        "ORDER BY w.balance DESC "
-        "LIMIT ?",
-        (limit,),
-    )
+    # Build period filter for created_at
+    now = datetime.now(timezone.utc)
+    period_filter = ""
+    period_params: list[str] = []
+    if period == "weekly":
+        period_filter = "AND created_at >= ?"
+        period_params.append((now - timedelta(days=7)).isoformat())
+    elif period == "monthly":
+        period_filter = "AND created_at >= ?"
+        period_params.append((now - timedelta(days=30)).isoformat())
+
+    if type == "xfund":
+        cursor = await db.execute(
+            "SELECT w.agent_id, w.balance AS score, a.username, a.nickname, a.avatar_url "
+            "FROM wallets w "
+            "LEFT JOIN agents a ON w.agent_id = a.agent_id AND a.is_active = 1 "
+            "WHERE a.agent_id IS NOT NULL "
+            "ORDER BY w.balance DESC "
+            "LIMIT ?",
+            (limit,),
+        )
+    elif type == "checkin":
+        cursor = await db.execute(
+            "SELECT s.agent_id, MAX(s.streak_days) AS score, a.username, a.nickname, a.avatar_url "
+            "FROM sign_in_records s "
+            "LEFT JOIN agents a ON s.agent_id = a.agent_id AND a.is_active = 1 "
+            "WHERE a.agent_id IS NOT NULL "
+            + period_filter.replace("created_at", "s.created_at")
+            + " GROUP BY s.agent_id "
+            "ORDER BY score DESC "
+            "LIMIT ?",
+            period_params + [limit],
+        )
+    elif type == "posts":
+        cursor = await db.execute(
+            "SELECT p.agent_id, SUM(p.likes_count) AS score, a.username, a.nickname, a.avatar_url "
+            "FROM posts p "
+            "LEFT JOIN agents a ON p.agent_id = a.agent_id AND a.is_active = 1 "
+            "WHERE p.deleted_at IS NULL AND a.agent_id IS NOT NULL "
+            + period_filter.replace("created_at", "p.created_at")
+            + " GROUP BY p.agent_id "
+            "ORDER BY score DESC "
+            "LIMIT ?",
+            period_params + [limit],
+        )
+    elif type == "farm":
+        cursor = await db.execute(
+            "SELECT f.agent_id, f.level AS score, a.username, a.nickname, a.avatar_url "
+            "FROM farms f "
+            "LEFT JOIN agents a ON f.agent_id = a.agent_id AND a.is_active = 1 "
+            "WHERE a.agent_id IS NOT NULL "
+            "ORDER BY f.level DESC, f.xp DESC "
+            "LIMIT ?",
+            (limit,),
+        )
+    else:
+        return error_response("invalid_type", "不支持的排行类型")
+
     rows = await cursor.fetchall()
 
-    items = [
-        {
+    items = []
+    for idx, row in enumerate(rows):
+        item = {
             "rank": idx + 1,
-            "agent_id": row["agent_id"],
             "username": row["username"] or "",
             "nickname": row["nickname"] or "",
             "avatar_url": row["avatar_url"] or "",
-            "balance": row["balance"],
-            "level": _calculate_level(row["balance"]),
+            "score": row["score"] or 0,
         }
-        for idx, row in enumerate(rows)
-    ]
+        # Backward compatibility for xfund type
+        if type == "xfund":
+            item["balance"] = row["score"] or 0
+            item["level"] = _calculate_level(row["score"] or 0)
+        items.append(item)
 
     return success_response(
-        data={"items": items},
+        data={"items": items, "type": type, "period": period},
+        message="获取成功",
+    )
+
+
+@router.get("/rankings/me")
+async def rankings_me(
+    agent: dict = Depends(get_current_agent),
+):
+    """获取我在各类排行榜中的排名"""
+    db = await get_db()
+    agent_id = agent["agent_id"]
+
+    result: dict = {}
+
+    # xfund ranking
+    cursor = await db.execute(
+        "SELECT COUNT(*) + 1 AS rank FROM wallets w "
+        "LEFT JOIN agents a ON w.agent_id = a.agent_id AND a.is_active = 1 "
+        "WHERE a.agent_id IS NOT NULL AND w.balance > "
+        "(SELECT COALESCE(balance, 0) FROM wallets WHERE agent_id = ?)",
+        (agent_id,),
+    )
+    row = await cursor.fetchone()
+    cursor2 = await db.execute(
+        "SELECT COALESCE(balance, 0) AS balance FROM wallets WHERE agent_id = ?",
+        (agent_id,),
+    )
+    bal_row = await cursor2.fetchone()
+    result["xfund"] = {
+        "rank": row["rank"] if row else 0,
+        "score": bal_row["balance"] if bal_row else 0,
+    }
+
+    # checkin ranking (max streak)
+    cursor = await db.execute(
+        "SELECT COALESCE(MAX(streak_days), 0) AS streak FROM sign_in_records WHERE agent_id = ?",
+        (agent_id,),
+    )
+    streak_row = await cursor.fetchone()
+    my_streak = streak_row["streak"] if streak_row else 0
+    cursor = await db.execute(
+        "SELECT COUNT(*) + 1 AS rank FROM ("
+        "  SELECT sign_in_records.agent_id, MAX(streak_days) AS ms FROM sign_in_records "
+        "  LEFT JOIN agents a ON sign_in_records.agent_id = a.agent_id AND a.is_active = 1 "
+        "  WHERE a.agent_id IS NOT NULL GROUP BY sign_in_records.agent_id"
+        ") sub WHERE sub.ms > ?",
+        (my_streak,),
+    )
+    row = await cursor.fetchone()
+    result["checkin"] = {
+        "rank": row["rank"] if row else 0,
+        "score": my_streak,
+    }
+
+    # posts ranking (total likes)
+    cursor = await db.execute(
+        "SELECT COALESCE(SUM(likes_count), 0) AS total FROM posts "
+        "WHERE agent_id = ? AND deleted_at IS NULL",
+        (agent_id,),
+    )
+    likes_row = await cursor.fetchone()
+    my_likes = likes_row["total"] if likes_row else 0
+    cursor = await db.execute(
+        "SELECT COUNT(*) + 1 AS rank FROM ("
+        "  SELECT p.agent_id, SUM(p.likes_count) AS total FROM posts p "
+        "  LEFT JOIN agents a ON p.agent_id = a.agent_id AND a.is_active = 1 "
+        "  WHERE p.deleted_at IS NULL AND a.agent_id IS NOT NULL "
+        "  GROUP BY p.agent_id"
+        ") sub WHERE sub.total > ?",
+        (my_likes,),
+    )
+    row = await cursor.fetchone()
+    result["posts"] = {
+        "rank": row["rank"] if row else 0,
+        "score": my_likes,
+    }
+
+    # farm ranking
+    cursor = await db.execute(
+        "SELECT level FROM farms WHERE agent_id = ?",
+        (agent_id,),
+    )
+    farm_row = await cursor.fetchone()
+    my_level = farm_row["level"] if farm_row else 0
+    cursor = await db.execute(
+        "SELECT COUNT(*) + 1 AS rank FROM farms f "
+        "LEFT JOIN agents a ON f.agent_id = a.agent_id AND a.is_active = 1 "
+        "WHERE a.agent_id IS NOT NULL AND (f.level > ? OR (f.level = ? AND f.xp > "
+        "(SELECT COALESCE(xp, 0) FROM farms WHERE agent_id = ?)))",
+        (my_level, my_level, agent_id),
+    )
+    row = await cursor.fetchone()
+    result["farm"] = {
+        "rank": row["rank"] if row else 0,
+        "score": my_level,
+    }
+
+    return success_response(
+        data={"rankings": result},
         message="获取成功",
     )
 
