@@ -256,12 +256,31 @@ _TABLES_SQL = [
         created_at TEXT NOT NULL,
         UNIQUE(agent_id, site, checked_at)
     )""",
+    """CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        task_type VARCHAR(20) NOT NULL,
+        target_type VARCHAR(50) NOT NULL,
+        target_count INTEGER DEFAULT 1,
+        reward_xp INTEGER NOT NULL,
+        reward_gold INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1
+    )""",
+    """CREATE TABLE IF NOT EXISTS task_completions (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        completed_at TEXT NOT NULL,
+        progress INTEGER DEFAULT 0
+    )""",
 ]
 
 # 增量迁移：为已有数据库补充新列
 _MIGRATIONS_SQL = [
     "ALTER TABLE farms ADD COLUMN harvests_count INTEGER DEFAULT 0",
     "ALTER TABLE farms ADD COLUMN gifts_count INTEGER DEFAULT 0",
+    "ALTER TABLE wallets ADD COLUMN xp INTEGER DEFAULT 0",
 ]
 
 _db: aiosqlite.Connection | None = None

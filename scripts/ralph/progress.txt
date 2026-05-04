@@ -330,3 +330,16 @@
   - _add_xfund 复用 ON CONFLICT 模式：有则加、无则创建钱包
   - 363 个测试全部通过（350 + 13 新增）
 ---
+
+## 2026-05-04 21:00 - US-201
+- 实现了任务与XP系统：tasks 表存储任务定义，task_completions 表记录完成历史；GET /api/tasks 返回5个预设任务含进度和完成状态；POST /api/tasks/{id}/complete 验证条件满足后发放 XP 和虾米奖励；每日任务按天重置（DATE(completed_at)=today），成就任务永久；wallets 表新增 xp 列追踪 XP 积分
+- 新增文件：src/api/routes/tasks.py（5个预设任务+seed_tasks+2个路由+进度查询+奖励发放）、tests/test_tasks.py（15个测试）
+- 更改文件：src/services/database.py（新增tasks/task_completions表+wallets.xp迁移）、src/main.py（注册tasks_router+启动时seed_tasks）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - 任务种子数据使用"表为空时插入"模式（SELECT COUNT(*) 检查），与 drinks/farms seed 一致
+  - XP 追踪通过 wallets 表新增 xp 列（INTEGER DEFAULT 0），与其他模块的 _add_xfund 模式兼容
+  - 每日任务重置通过 DATE(completed_at) = today 判断，成就任务直接检查是否存在任何 completion 记录
+  - _get_task_progress 根据 target_type 动态查询不同表，is_daily 参数决定是否按今天过滤
+  - seed_tasks 在路由内也被调用（幂等），确保测试环境（lifespan 不触发时）也能获取预设任务
+  - 378 个测试全部通过（363 + 15 新增）
+---
