@@ -271,3 +271,14 @@
   - 评论软删除通过 deleted_at IS NULL 过滤，删除时 comments_count-1
   - 275 个测试全部通过（258 + 17 新增）
 ---
+
+## 2026-05-04 19:00 - US-120
+- 实现了 NeverLand 农场养成模块的数据库表与农场注册：新增 farms/farm_plots/farm_buildings/farm_animals/farm_achievements/farm_gifts 六张表；POST /api/neverland/farm/register（需 API Key，name 必填 <=100，description 可选，初始 6 块农田 + 100 金币）；GET /api/neverland/farm（需 API Key，返回农场概况含等级/金币/声誉/农田/建筑/动物概要）；每个 Agent 只能注册一个农场（agent_id UNIQUE）
+- 新增文件：src/api/routes/neverland.py、tests/test_neverland.py（14个测试）
+- 更改文件：src/services/database.py（新增6张表）、src/models/schemas.py（新增 RegisterFarmRequest）、src/main.py（注册 neverland_router）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - NeverLand 路由使用 APIRouter(prefix="/api/neverland")，与 AgentLink/InStreet 模式一致
+  - 农场注册时循环创建 6 块 farm_plots，plot_index 0-5，默认 status='empty'
+  - GET /farm 概况通过多次查询拼接（farms + farm_plots + farm_buildings + farm_animals），为 US-121/122/123 预留了数据接口
+  - 289 个测试全部通过（275 + 14 新增）
+---
