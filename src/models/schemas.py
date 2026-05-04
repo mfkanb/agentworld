@@ -115,3 +115,7 @@ class CreateCommentRequest(BaseModel):
 class RegisterFarmRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: str = Field("", max_length=500)
+
+
+class PlantRequest(BaseModel):
+    crop_type: str = Field(..., min_length=1, max_length=50)

@@ -4,10 +4,19 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 
-from src.models.schemas import RegisterFarmRequest
+from src.models.schemas import PlantRequest, RegisterFarmRequest
 from src.services.auth import get_current_agent
 from src.services.database import get_db
 from src.utils.helpers import error_response, success_response
+
+# 作物定义：种子价格、成熟天数、收获收益
+CROPS = {
+    "carrot": {"name": "胡萝卜", "seed_price": 5, "growth_days": 1, "harvest_value": 10},
+    "wheat": {"name": "小麦", "seed_price": 10, "growth_days": 2, "harvest_value": 20},
+    "tomato": {"name": "番茄", "seed_price": 15, "growth_days": 3, "harvest_value": 30},
+    "apple": {"name": "苹果", "seed_price": 30, "growth_days": 5, "harvest_value": 60},
+    "rose": {"name": "玫瑰", "seed_price": 50, "growth_days": 7, "harvest_value": 100},
+}
 
 router = APIRouter(prefix="/api/neverland", tags=["neverland"])
 
@@ -140,4 +149,208 @@ async def get_farm(agent: dict = Depends(get_current_agent)):
             "created_at": farm["created_at"],
         },
         message="获取农场概况成功",
+    )
+
+
+@router.get("/farm/crops")
+async def get_crops():
+    """获取可种植的作物列表（无需认证）"""
+    crop_list = [
+        {
+            "crop_type": key,
+            "name": val["name"],
+            "seed_price": val["seed_price"],
+            "growth_days": val["growth_days"],
+            "harvest_value": val["harvest_value"],
+        }
+        for key, val in CROPS.items()
+    ]
+    return success_response(data={"crops": crop_list}, message="获取作物列表成功")
+
+
+@router.post("/farm/plots/{plot_index}/plant")
+async def plant_crop(
+    plot_index: int,
+    req: PlantRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    """种植作物（需要 API Key），扣除种子费用"""
+    db = await get_db()
+
+    # 验证作物类型
+    if req.crop_type not in CROPS:
+        return error_response("invalid_crop", f"未知作物类型: {req.crop_type}")
+
+    crop = CROPS[req.crop_type]
+
+    # 查询农场
+    cursor = await db.execute(
+        "SELECT id, gold FROM farms WHERE agent_id = ?",
+        (agent["agent_id"],),
+    )
+    farm = await cursor.fetchone()
+    if not farm:
+        return error_response("not_found", "你还没有注册农场")
+
+    # 检查金币是否足够
+    if farm["gold"] < crop["seed_price"]:
+        return error_response(
+            "insufficient_gold",
+            f"金币不足，种植{crop['name']}需要 {crop['seed_price']} 金币",
+        )
+
+    # 查询指定农田
+    cursor = await db.execute(
+        "SELECT id, status FROM farm_plots WHERE farm_id = ? AND plot_index = ?",
+        (farm["id"], plot_index),
+    )
+    plot = await cursor.fetchone()
+    if not plot:
+        return error_response("invalid_plot", f"农田编号 {plot_index} 不存在")
+
+    if plot["status"] != "empty":
+        return error_response("plot_not_empty", "该农田已种植作物，请先收获或清除")
+
+    # 种植：扣除金币，更新农田
+    now = datetime.now(timezone.utc).isoformat()
+    await db.execute(
+        """UPDATE farm_plots SET crop_type = ?, planted_at = ?, watered_at = NULL, growth_days = ?, status = 'planted'
+           WHERE id = ?""",
+        (req.crop_type, now, crop["growth_days"], plot["id"]),
+    )
+    await db.execute(
+        "UPDATE farms SET gold = gold - ? WHERE id = ?",
+        (crop["seed_price"], farm["id"]),
+    )
+    await db.commit()
+
+    return success_response(
+        data={
+            "plot_index": plot_index,
+            "crop_type": req.crop_type,
+            "crop_name": crop["name"],
+            "seed_price": crop["seed_price"],
+            "growth_days": crop["growth_days"],
+            "planted_at": now,
+            "status": "planted",
+        },
+        message=f"成功种植{crop['name']}",
+    )
+
+
+@router.post("/farm/plots/{plot_index}/water")
+async def water_crop(
+    plot_index: int,
+    agent: dict = Depends(get_current_agent),
+):
+    """浇水（需要 API Key），更新 watered_at"""
+    db = await get_db()
+
+    # 查询农场
+    cursor = await db.execute(
+        "SELECT id FROM farms WHERE agent_id = ?",
+        (agent["agent_id"],),
+    )
+    farm = await cursor.fetchone()
+    if not farm:
+        return error_response("not_found", "你还没有注册农场")
+
+    # 查询指定农田
+    cursor = await db.execute(
+        "SELECT id, status, crop_type FROM farm_plots WHERE farm_id = ? AND plot_index = ?",
+        (farm["id"], plot_index),
+    )
+    plot = await cursor.fetchone()
+    if not plot:
+        return error_response("invalid_plot", f"农田编号 {plot_index} 不存在")
+
+    if plot["status"] == "empty":
+        return error_response("not_planted", "该农田未种植作物，无法浇水")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.execute(
+        "UPDATE farm_plots SET watered_at = ? WHERE id = ?",
+        (now, plot["id"]),
+    )
+    await db.commit()
+
+    return success_response(
+        data={
+            "plot_index": plot_index,
+            "crop_type": plot["crop_type"],
+            "watered_at": now,
+        },
+        message="浇水成功",
+    )
+
+
+@router.post("/farm/plots/{plot_index}/harvest")
+async def harvest_crop(
+    plot_index: int,
+    agent: dict = Depends(get_current_agent),
+):
+    """收获成熟作物（需要 API Key），获得金币"""
+    db = await get_db()
+
+    # 查询农场
+    cursor = await db.execute(
+        "SELECT id, gold FROM farms WHERE agent_id = ?",
+        (agent["agent_id"],),
+    )
+    farm = await cursor.fetchone()
+    if not farm:
+        return error_response("not_found", "你还没有注册农场")
+
+    # 查询指定农田
+    cursor = await db.execute(
+        "SELECT id, crop_type, planted_at, growth_days, status FROM farm_plots WHERE farm_id = ? AND plot_index = ?",
+        (farm["id"], plot_index),
+    )
+    plot = await cursor.fetchone()
+    if not plot:
+        return error_response("invalid_plot", f"农田编号 {plot_index} 不存在")
+
+    if plot["status"] == "empty":
+        return error_response("not_planted", "该农田未种植作物，无法收获")
+
+    # 判断是否成熟：planted_at + growth_days <= 当前时间
+    if plot["planted_at"] and plot["growth_days"]:
+        from datetime import timedelta
+
+        planted = datetime.fromisoformat(plot["planted_at"])
+        maturity_time = planted + timedelta(days=plot["growth_days"])
+        now = datetime.now(timezone.utc)
+
+        if now < maturity_time:
+            remaining = maturity_time - now
+            hours_left = remaining.total_seconds() / 3600
+            return error_response(
+                "not_mature",
+                f"作物尚未成熟，还需约 {hours_left:.1f} 小时",
+            )
+
+    crop_type = plot["crop_type"]
+    crop = CROPS.get(crop_type)
+    harvest_value = crop["harvest_value"] if crop else 0
+
+    # 收获：清空农田，增加金币，增加 XP
+    await db.execute(
+        """UPDATE farm_plots SET crop_type = '', planted_at = NULL, watered_at = NULL, growth_days = 0, status = 'empty'
+           WHERE id = ?""",
+        (plot["id"],),
+    )
+    await db.execute(
+        "UPDATE farms SET gold = gold + ?, xp = xp + 5 WHERE id = ?",
+        (harvest_value, farm["id"]),
+    )
+    await db.commit()
+
+    return success_response(
+        data={
+            "plot_index": plot_index,
+            "crop_type": crop_type,
+            "harvest_value": harvest_value,
+            "xp_gained": 5,
+        },
+        message=f"收获成功，获得 {harvest_value} 金币和 5 经验",
     )
