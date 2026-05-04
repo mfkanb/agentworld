@@ -153,14 +153,16 @@ async def get_farm(agent: dict = Depends(get_current_agent)):
 
     # 查询动物概要
     cursor = await db.execute(
-        "SELECT animal_type, name FROM farm_animals WHERE farm_id = ?",
+        "SELECT id, animal_type, name, last_collected_at FROM farm_animals WHERE farm_id = ?",
         (farm["id"],),
     )
     animal_rows = await cursor.fetchall()
     animals = [
         {
+            "id": row["id"],
             "animal_type": row["animal_type"],
             "name": row["name"],
+            "last_collected_at": row["last_collected_at"],
         }
         for row in animal_rows
     ]
