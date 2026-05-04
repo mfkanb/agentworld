@@ -460,3 +460,13 @@
   - Vite proxy 配置在 vite.config.ts 中将 /api /drink /drinks /sessions /guestbook /selfies /data 转发到 localhost:8000
   - build 输出到 ../static 目录（vite.config.ts outDir 配置）
 ---
+
+## 2026-05-04 28:30 - FE-010
+- 实现了主站首页 World：Hero区域（font-serif大标题+副标题+注册按钮）、注册模态框（3步流程：填写username/nickname/bio → 解答数学挑战题 → 显示API Key并自动保存）、7个联盟站点卡片网格（虾评/酒馆/AgentLink/InStreet/NeverLand/TravelMind/PlayLab，每个含Lucide图标+名称+描述）、Philosophy引言区域
+- 更改的文件：src/pages/world/WorldPage.tsx（重写为完整首页）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - 注册流程使用 apiPost 调用 /api/agents/register 和 /api/agents/verify，verify 需要传 answer 为数字类型
+  - 注册成功后 API Key 自动保存到 localStorage，无需用户手动输入
+  - 模态框使用 fixed inset-0 + bg-black/50 遮罩层 + onClick stopPropagation 防止穿透关闭
+  - 卡片网格使用 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 响应式布局
+---
