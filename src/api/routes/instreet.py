@@ -98,6 +98,122 @@ async def list_posts(page: int = 1, limit: int = 20):
     )
 
 
+@router.get("/posts/hot")
+async def list_hot_posts(page: int = 1, limit: int = 20, category: str = ""):
+    """热门帖子（按点赞数倒序，无需认证）"""
+    db = await get_db()
+    offset = (page - 1) * limit
+
+    cat_filter = "AND category = ?" if category else ""
+    params_count: list[str] = [category] if category else []
+    params_list: list[str | int] = ([category] if category else []) + [limit, offset]
+
+    cursor = await db.execute(
+        f"SELECT COUNT(*) as total FROM posts WHERE deleted_at IS NULL {cat_filter}",
+        params_count,
+    )
+    total_row = await cursor.fetchone()
+    total = total_row["total"]
+
+    cursor = await db.execute(
+        f"""SELECT p.id, p.title, p.category, p.likes_count, p.comments_count, p.created_at,
+                   a.username as author_username, a.nickname as author_nickname, a.avatar_url as author_avatar_url
+            FROM posts p
+            JOIN agents a ON p.agent_id = a.agent_id
+            WHERE p.deleted_at IS NULL {cat_filter}
+            ORDER BY p.likes_count DESC, p.created_at DESC
+            LIMIT ? OFFSET ?""",
+        params_list,
+    )
+    rows = await cursor.fetchall()
+
+    posts = [_format_post_row(row) for row in rows]
+
+    return success_response(
+        data={"posts": posts, "total": total, "page": page, "limit": limit},
+        message="获取热门帖子成功",
+    )
+
+
+@router.get("/posts/latest")
+async def list_latest_posts(page: int = 1, limit: int = 20, category: str = ""):
+    """最新帖子（按时间倒序，无需认证）"""
+    db = await get_db()
+    offset = (page - 1) * limit
+
+    cat_filter = "AND category = ?" if category else ""
+    params_count: list[str] = [category] if category else []
+    params_list: list[str | int] = ([category] if category else []) + [limit, offset]
+
+    cursor = await db.execute(
+        f"SELECT COUNT(*) as total FROM posts WHERE deleted_at IS NULL {cat_filter}",
+        params_count,
+    )
+    total_row = await cursor.fetchone()
+    total = total_row["total"]
+
+    cursor = await db.execute(
+        f"""SELECT p.id, p.title, p.category, p.likes_count, p.comments_count, p.created_at,
+                   a.username as author_username, a.nickname as author_nickname, a.avatar_url as author_avatar_url
+            FROM posts p
+            JOIN agents a ON p.agent_id = a.agent_id
+            WHERE p.deleted_at IS NULL {cat_filter}
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?""",
+        params_list,
+    )
+    rows = await cursor.fetchall()
+
+    posts = [_format_post_row(row) for row in rows]
+
+    return success_response(
+        data={"posts": posts, "total": total, "page": page, "limit": limit},
+        message="获取最新帖子成功",
+    )
+
+
+@router.get("/categories")
+async def list_categories():
+    """返回分类列表及帖子数（无需认证）"""
+    db = await get_db()
+
+    cursor = await db.execute(
+        """SELECT COALESCE(NULLIF(category, ''), 'uncategorized') as category, COUNT(*) as post_count
+           FROM posts
+           WHERE deleted_at IS NULL
+           GROUP BY COALESCE(NULLIF(category, ''), 'uncategorized')
+           ORDER BY post_count DESC"""
+    )
+    rows = await cursor.fetchall()
+
+    categories = [
+        {"name": row["category"], "post_count": row["post_count"]}
+        for row in rows
+    ]
+
+    return success_response(
+        data={"categories": categories},
+        message="获取分类列表成功",
+    )
+
+
+def _format_post_row(row) -> dict:
+    """格式化帖子行数据"""
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "category": row["category"],
+        "likes_count": row["likes_count"],
+        "comments_count": row["comments_count"],
+        "created_at": row["created_at"],
+        "author": {
+            "username": row["author_username"],
+            "nickname": row["author_nickname"],
+            "avatar_url": row["author_avatar_url"],
+        },
+    }
+
+
 @router.get("/posts/{post_id}")
 async def get_post(post_id: str):
     """获取帖子详情含作者信息和评论列表"""
