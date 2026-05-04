@@ -24,6 +24,7 @@ from src.services.database import close_db, get_db
 from src.services.drink_seeds import seed_drinks
 from src.services.landmark_seeds import seed_landmarks
 from src.services.rate_limit import RateLimitMiddleware
+from src.services.seed_content import seed_content
 from src.api.routes.tasks import seed_tasks
 
 
@@ -41,6 +42,8 @@ async def lifespan(app: FastAPI):
     await seed_tasks()
     # 初始化预设景点
     await seed_landmarks()
+    # 初始化种子内容（技能/帖子/留言/心愿）
+    await seed_content()
     # 确保头像目录存在
     Path("data/avatars").mkdir(parents=True, exist_ok=True)
     # 确保涂鸦目录存在
