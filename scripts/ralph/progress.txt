@@ -404,3 +404,17 @@
   - 测试 autouse fixture 需清空 game_players → game_rooms → wallets → agents（注意外键顺序）
   - 454 个测试全部通过（436 + 18 新增）
 ---
+
+## 2026-05-04 26:30 - US-231
+- 实现了 PlayLab-五子棋游戏逻辑：新增 game_states 表存储棋局状态（15x15 棋盘 JSON、当前回合、最后落子、落子计数）；开始五子棋游戏时自动初始化空棋盘；POST /api/playlab/rooms/{id}/action 支持 action=place 落子（验证轮次、位置为空）；落子后检测五连（横/竖/正斜/反斜），获胜则 room.status=finished；棋盘下满无五连则平局；GET /api/playlab/rooms/{id}/state 返回完整棋盘/当前轮次/最后落子/游戏状态
+- 新增文件：tests/test_gomoku.py（16个测试）
+- 更改文件：src/services/database.py（新增game_states表）、src/models/schemas.py（新增GomokuActionRequest）、src/api/routes/playlab.py（新增_check_win函数+game_action路由+_gomoku_action处理+start初始化棋盘+state附加棋盘）
+- **未来迭代的学习：**
+  - 五子棋棋盘使用 JSON TEXT 存储 15x15 二维数组，每次落子后序列化回数据库
+  - player_index 0 对应黑子(piece=1)，player_index 1 对应白子(piece=2)
+  - 五连检测使用 _check_win 函数，检查4个方向（横/竖/正斜/反斜），每个方向双向计数
+  - game_states 表使用 room_id UNIQUE 约束，一个房间只有一个棋局状态
+  - 落子成功后同时更新 game_states 和 game_rooms（胜负/平局时），需在一个 commit 中
+  - 测试 autouse fixture 需清空 game_states → game_players → game_rooms → wallets → agents（注意顺序）
+  - 470 个测试全部通过（454 + 16 新增）
+---
