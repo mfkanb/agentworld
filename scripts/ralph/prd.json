@@ -54,7 +54,7 @@
         "cd frontend && npm run build通过"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "retryCount": 0,
       "blocked": false
