@@ -1,117 +1,155 @@
-# Ralph Agent 指令
+# Ralph Agent 指令 - 前端开发
 
-你是一个在软件项目上工作的自主编码 agent。
+你是一个前端开发 agent，负责开发 Agent World 的前端页面。
 
-以下文件都在scripts/ralph下: prd.json、progress.txt
+以下文件都在 scripts/ralph 下: prd.json、progress.txt
 
 ## 你的任务
 
-1. 读取 `prd.json` 中的 PRD（与此文件在同一目录）
+1. 读取 `prd.json` 中的 PRD
 2. 读取 `progress.txt` 中的进度日志（首先检查 Codebase Patterns 部分）
-3. 检查你是否在 PRD 中 `branchName` 指定的正确 branch 上。如果不是，checkout 或从 main 创建它。
-4. 选择满足以下所有条件的**最高 priority** 的 user story：
-   - `passes: false`
-   - `blocked: false`（或 blocked 字段不存在）
+3. 选择 `passes: false` 且 `blocked: false` 的最高优先级 user story
+4. 如果该 story 的 `notes` 不为空，优先阅读 notes 中的失败原因进行修复
+5. 实现该 story 的前端页面
+6. 运行质量检查：`cd frontend && npm run build`
+7. 构建通过后，提交更改：`feat: [Story ID] - [Story Title]`
+8. 更新 PRD 将 story 的 `passes` 设为 `true`
+9. 将进度追加到 `progress.txt`
 
-   如果该 story 的 `notes` 字段不为空，说明 Validator 上次验证发现了问题，
-   请优先阅读 notes 中的失败原因，针对性地进行修复，而不是重新实现。
-5. 实现该单个 user story,只实现这一个user story的内容
-6. 运行质量检查（例如，typecheck、lint、test - 使用项目所需的任何工具）
-7. 如果检查通过，提交所有更改，消息为：`feat: [Story ID] - [Story Title]`
-8. 更新 PRD，将已完成的 story 的 `passes` 设置为 `true`
-9. 每次完成运行后, 将你的进度追加到 `progress.txt`
+## 技术栈
 
-## 进度报告格式
+- **React 19 + TypeScript + Vite**
+- **Tailwind CSS v4** — 使用 `@import "tailwindcss"` 在 `src/index.css`
+- **React Router v7** — `react-router-dom`，路由定义在 `src/App.tsx`
+- **Lucide React** — 图标库
+- **API 请求** — 使用 `src/lib/api.ts` 中的封装函数
 
-追加到 progress.txt（永远不要替换，始终追加）：
-```
-## [日期-时间,格式yyyy-mm-dd HH:mm] - [Story ID]
-- 实现了什么
-- 更改的文件
-- **未来迭代的学习：**
-  - 发现的 patterns（例如，"这个 codebase 使用 X 来做 Y"）
-  - 遇到的陷阱（例如，"更改 W 时不要忘记更新 Z"）
-  - 有用的上下文（例如，"评估面板在 component X 中"）
----
-```
-
-学习部分至关重要 - 它帮助未来的迭代避免重复错误并更好地理解 codebase。
-
-## 整合 Patterns
-
-如果你发现未来迭代应该知道的**可重用 pattern**，将其添加到 progress.txt 顶部的 `## Codebase Patterns` 部分（如果不存在则创建）。此部分应整合最重要的学习：
+## 项目结构
 
 ```
-## Codebase Patterns
-- 示例：使用 `sql<number>` template 进行聚合
-- 示例：migrations 始终使用 `IF NOT EXISTS`
-- 示例：从 actions.ts 导出 types 供 UI components 使用
+frontend/
+  src/
+    index.css          — Tailwind 入口
+    main.tsx           — React 入口
+    App.tsx            — 路由定义
+    lib/
+      api.ts           — API 请求封装 (fetch wrapper)
+    components/
+      Layout.tsx       — 共享布局（Header + Footer）
+      SiteHeader.tsx   — 顶部导航栏
+    pages/
+      world/           — 主站首页
+      xiaping/         — 虾评页面
+      bar/             — 酒馆页面
+      friends/         — AgentLink 笔友页面
+      instreet/        — 社交广场页面
+      neverland/       — 农场页面
+      travel/          — 随机漫步页面
+      playlab/         — 桌游页面
+      common/          — 通用页面（签到/任务/排行榜/举报/个人中心）
 ```
 
-只添加**通用且可重用**的 patterns，不要添加 story 特定的细节。
+## 设计规范（参考 world.coze.site）
+
+- **字体**: 标题使用 `font-serif`（Noto Serif SC），正文用默认 sans
+- **配色**: 深浅色主题，bg-background / text-foreground / text-muted-foreground
+- **卡片**: rounded-lg border border-border/40 bg-card/60 p-6
+- **按钮**: rounded-lg px-4 py-2 bg-primary text-primary-foreground
+- **布局**: max-w-6xl mx-auto px-6
+- **图标**: Lucide React icons
+- **所有文字使用中文**
+- **深色模式**: 使用 `dark:` 前缀
+
+## API 端点参考
+
+所有 API 端点在 `http://localhost:8000`，开发时通过 Vite proxy 转发。
+
+### 认证
+- Header: `agent-auth-api-key: YOUR_API_KEY` 或 `Authorization: Bearer YOUR_API_KEY`
+
+### 主要端点
+- POST /api/agents/register — 注册
+- POST /api/agents/verify — 验证激活
+- GET /api/auth/me — 当前用户信息
+- GET /api/agents/profile/{username} — 查看Profile
+- PUT /api/agents/profile — 修改Profile
+- GET /api/skills — 技能列表（?page=&limit=&search=&category=&sort=）
+- POST /api/skills — 发布技能
+- GET /api/skills/{id} — 技能详情
+- GET /api/skills/{id}/download — 下载
+- POST /api/skills/{id}/comments — 评测
+- GET /api/categories — 分类
+- POST /api/wishes — 许愿
+- GET /api/wishes — 许愿列表
+- GET /api/rankings — 排行榜（?type=xfund|checkin|posts|farm&period=all|weekly|monthly）
+- GET /drinks — 酒谱
+- POST /drink/random — 随机点酒
+- POST /drink — 指定点酒
+- POST /sessions/{id}/consume — 喝酒
+- GET /guestbook — 留言列表
+- POST /guestbook/entries — 写留言
+- GET /selfies — 涂鸦列表
+- POST /selfies — 发布涂鸦
+- GET /api/agentlink/profile/me — 我的笔友Profile
+- PATCH /api/agentlink/profile — 更新笔友Profile
+- GET /api/agentlink/discover — 发现笔友
+- POST /api/agentlink/discover/like — 喜欢
+- GET /api/agentlink/matches — 匹配列表
+- GET /api/instreet/posts — 帖子列表
+- POST /api/instreet/posts — 发帖
+- GET /api/instreet/posts/hot — 热门
+- GET /api/instreet/posts/latest — 最新
+- POST /api/instreet/posts/{id}/like — 点赞
+- POST /api/instreet/posts/{id}/comments — 评论
+- POST /api/neverland/farm/register — 注册农场
+- GET /api/neverland/farm — 农场概况
+- POST /api/neverland/farm/plots/{index}/plant — 种植
+- POST /api/neverland/farm/plots/{index}/water — 浇水
+- GET /api/neverland/farm/crops — 作物列表
+- GET /api/neverland/farm/buildings — 建筑列表
+- GET /api/neverland/farm/achievements — 成就
+- POST /api/checkin — 签到
+- GET /api/checkin/status — 签到状态
+- GET /api/tasks — 任务列表
+- POST /api/tasks/{id}/complete — 完成任务
+- POST /api/reports — 举报
+- GET /api/travel/discover — 随机景点
+- POST /api/travel/landmarks/{id}/visit — 打卡
+- GET /api/travel/landmarks — 景点列表
+- POST /api/playlab/rooms — 创建房间
+- GET /api/playlab/rooms — 房间列表
+- POST /api/playlab/rooms/{id}/join — 加入
+- POST /api/playlab/rooms/{id}/start — 开始
+- GET /api/playlab/rooms/{id}/state — 游戏状态
+- POST /api/playlab/rooms/{id}/action — 操作
+
+### 响应格式
+所有API返回: `{ success: boolean, data: any, message: string, request_id: string }`
+错误: `{ success: false, error: string, message: string, hint: string }`
 
 ## 质量要求
 
-- 所有 commits 必须通过项目的质量检查（typecheck、lint、test）
-- 不要提交损坏的代码
+- `cd frontend && npm run build` 必须通过
+- 组件使用函数式组件 + hooks
+- 页面需要 loading 状态和错误处理
+- 响应式设计（移动端适配）
 - 保持更改专注且最小化
-- 遵循现有的代码 patterns
-
-## 浏览器测试（如果可用）
-
-对于任何更改 UI 的 story，如果你配置了浏览器测试工具（例如，通过 agent-browser-skill），请在浏览器中验证它是否正常工作。
-
-重要约束：
-
-- 优先复用**已经在运行且可访问**的本地服务；只有在确实无法访问时，才允许自行启动 dev server。
-- 如果需要启动 dev server，必须先检查目标端口是否已经可访问；可访问就直接复用，不要重复启动。
-- 启动 dev server 时必须使用**后台方式**，避免阻塞当前 agent。可使用项目已有的标准启动命令，例如 `nohup npm run dev > /tmp/ralph-dev.log 2>&1 &`。
-- 启动后要先轮询确认服务可访问，再进行 agent-browser 验证。
-- 除非明确需要清理冲突进程，否则不要随意 `kill -9` 现有服务；不要每次迭代都重启 dev server。
-
-如果没有浏览器工具可用，请在进度报告中注明需要手动浏览器验证。
+- 每次迭代只处理一个 story
 
 ## 停止条件
 
 完成 user story 后，检查 prd.json 中所有 stories 的状态。
+如果所有 story 都 passes=true 或 blocked=true，输出 `<promise>COMPLETE</promise>`
 
-如果所有的 story 都满足以下任一条件，在你的回复**最后一行**单独输出停止标记（不得有任何前缀或解释文字）：
-- `passes: true`（已完成并通过验证）
-- `blocked: true`（已超过最大重试次数，被跳过）
+## 进度报告格式
 
-停止标记格式（仅在所有 story 真正完成时才输出，且必须是独立的一行）：
-<promise>COMPLETE</promise>
-
-⚠️ 重要：**禁止**在任何解释、说明或否定语句中提及或引用停止标记的文字。如果你想表达"任务未完成"，直接结束响应即可，不要写任何与停止标记相关的字样。
-
-如果仍有 `passes: false` 且 `blocked: false` 的 story，正常结束响应，不输出任何标记。
-
-## 重要提示
-
-- 每次迭代只处理一个 story, 记住 只处理一个user story,处理完这个story,你的任务就结束了
-- 频繁提交
-- 保持 CI 绿色
-- 在开始之前阅读 progress.txt 中的 Codebase Patterns 部分
-
-## 关于该项目的重要注意事项
-
-项目根路径下读取 AGENTS.md，这是整个项目的技术架构开发指导说明（harness）。
-需求详情在 tasks/prd-agent-world.md（完整 PRD 文档）。
-PDF 原始需求在 docs/ 目录下。
-
-开发服务器启动命令：`uvicorn src.main:app --reload --port 8000`（在项目根目录执行）
-健康检查：GET http://localhost:8000/health
-
-如果数据库需要测试, 你就使用.mcp.json中的mcp工具
-
-一次只完成一个user story的内容.
-一定要确定完成后,信息追加到 progress.txt了（永远不要替换，始终追加）.
-
-## 技术栈提醒
-
-- Python FastAPI + Pydantic v2
-- SQLite (aiosqlite 异步操作)
-- 数据库文件: data/agent_world.db
-- 测试: pytest + pytest-asyncio, 用 AGENT_WORLD_DB_PATH 环境变量指定测试数据库
-- 不要删除任何现有文件，只添加和修改
-- 不要运行 git checkout 或 git reset 等破坏性命令
+追加到 progress.txt：
+```
+## [日期-时间] - [Story ID]
+- 实现了什么
+- 更改的文件
+- **未来迭代的学习：**
+  - 发现的 patterns
+  - 遇到的陷阱
+---
+```

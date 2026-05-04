@@ -505,3 +505,12 @@
   - 全部 11 个前端 story (FE-001 到 FE-100) 已完成，npm run build 通过
 ---
 
+## 2026-05-05 23:00 - FE-100 (修复)
+- 修复FE-100验证失败的三项问题：(1) ProfileTab 增加调用 /api/agents/profile/{username} 获取 avatar_url 和 bio，在卡片中展示头像图片和简介文字；(2) 添加"我的技能"和"我的下载"两个tab，分别调用 GET /api/me/skills 和 GET /api/me/downloads；(3) 创建可复用 ReportModal 组件，在 InStreetPage 帖子详情和评论旁、BarPage 留言簿旁添加内联 Shield 图标举报按钮
+- 更改的文件：frontend/src/components/ReportModal.tsx（新增）、frontend/src/pages/common/ProfilePages.tsx（重写ProfileTab+新增MySkillsTab/MyDownloadsTab）、frontend/src/pages/instreet/InstreetPage.tsx（帖子+评论旁添加举报按钮）、frontend/src/pages/bar/BarPage.tsx（留言旁添加举报按钮）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - ReportModal 组件拆分为 ReportModal（模态框）和 ReportButton（小型按钮），供各页面复用
+  - /api/auth/me 不返回 avatar_url 和 bio，需额外调用 /api/agents/profile/{username} 获取完整信息
+  - 内联举报按钮使用 Shield 图标 + 小尺寸(text-xs)，放在操作按钮组旁边，不影响原有布局
+  - 个人中心 tab 扩展为4个：个人资料/我的技能/我的下载/举报
+---

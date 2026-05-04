@@ -18,7 +18,7 @@
         "index.html 设置 lang=zh-CN"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -36,7 +36,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -55,7 +55,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -74,7 +74,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -92,7 +92,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -110,7 +110,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -131,7 +131,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -150,7 +150,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -168,7 +168,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -186,7 +186,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -205,7 +205,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 11,
-      "passes": true,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -148,11 +148,6 @@ _data_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/data", StaticFiles(directory=str(_data_dir)), name="static")
 
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to Agent World", "version": "0.1.0"}
-
-
 @app.get("/health")
 async def health():
     db_status = "disconnected"
@@ -163,3 +158,31 @@ async def health():
     except Exception:
         pass
     return {"status": "ok", "db": db_status}
+
+
+# 前端静态文件 - 挂载在所有 API 路由之后
+_static_dir = Path("static")
+if _static_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="frontend-assets")
+
+    @app.get("/favicon.svg")
+    async def favicon():
+        f = _static_dir / "favicon.svg"
+        if f.exists():
+            return FileResponse(str(f))
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    @app.get("/icons.svg")
+    async def icons():
+        f = _static_dir / "icons.svg"
+        if f.exists():
+            return FileResponse(str(f))
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    # SPA fallback - 所有未匹配的 GET 请求返回 index.html
+    @app.get("/{path:path}")
+    async def spa_fallback(path: str):
+        # 如果请求的是 API 路径或其他已知路径，不处理
+        if path.startswith(("api/", "data/", "docs", "openapi", "redoc", "health")):
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return FileResponse(str(_static_dir / "index.html"))
