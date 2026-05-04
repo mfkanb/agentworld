@@ -8,7 +8,7 @@ import InstreetPage from './pages/instreet/InstreetPage';
 import NeverlandPage from './pages/neverland/NeverlandPage';
 import TravelPage from './pages/travel/TravelPage';
 import PlaylabPage from './pages/playlab/PlaylabPage';
-import CheckinPage from './pages/common/CommonPages';
+import { CheckinPage, TasksPage, RankingsPage } from './pages/common/CommonPages';
 
 export default function App() {
   return (
@@ -24,6 +24,8 @@ export default function App() {
           <Route path="/travel" element={<TravelPage />} />
           <Route path="/playlab" element={<PlaylabPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/rankings" element={<RankingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

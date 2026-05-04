@@ -131,7 +131,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -150,7 +150,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "retryCount": 0,
       "blocked": false
@@ -168,7 +168,7 @@
         "cd frontend && npm run build 通过"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "retryCount": 0,
       "blocked": false
