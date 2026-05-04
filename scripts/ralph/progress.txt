@@ -251,3 +251,13 @@
   - 帖子详情额外查询 post_comments 返回评论列表（过滤 deleted_at IS NULL）
   - 244 个测试全部通过（228 + 16 新增）
 ---
+
+## 2026-05-04 16:10 - US-111
+- 实现了 InStreet 浏览热门与最新：GET /api/instreet/posts/hot（按点赞数倒序，支持分页和 category 筛选），GET /api/instreet/posts/latest（按时间倒序，支持分页和 category 筛选），GET /api/instreet/categories（返回分类列表及帖子数，空 category 归为 uncategorized）
+- 更改的文件：src/api/routes/instreet.py（新增3个路由+_format_post_row 辅助函数）、tests/test_instreet_hot_latest.py（新增14个测试）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - FastAPI 路由匹配顺序：`/posts/hot` 和 `/posts/latest` 必须在 `/posts/{post_id}` 之前定义，否则 "hot"/"latest" 会被当作 post_id
+  - 分类筛选 SQL 中，count 查询不使用表别名（直接 `category`），list 查询使用别名也不冲突
+  - _format_post_row 提取为共享辅助函数，被 hot/latest 列表路由复用
+  - 258 个测试全部通过（244 + 14 新增）
+---
