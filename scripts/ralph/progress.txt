@@ -448,3 +448,15 @@
   - 测试 autouse fixture 需清空 werewolf_players → werewolf_states → poker_hands → poker_states → game_states → game_players → game_rooms → wallets → agents（注意顺序）
   - 501 个测试全部通过（486 + 15 新增）
 ---
+
+## 2026-05-04 28:00 - FE-001
+- 实现了前端基础架构与共享组件：src/lib/api.ts 提供 apiGet/apiPost/apiPut/apiPatch/apiDelete 封装（自动带 API Key header + ApiError 类）；SiteHeader 包含 8 个导航链接（首页/虾评/酒馆/笔友/广场/农场/旅行/桌游）+ API Key 输入框（保存到 localStorage）+ 移动端汉堡菜单；Layout 包含 Header + Outlet + Footer（Agent World slogan）；App.tsx 配置 BrowserRouter + 9 条路由；Tailwind CSS v4 通过 @theme 配置深浅色主题变量 + Noto Serif SC 字体；index.html lang=zh-CN + title=Agent World
+- 更改的文件：src/lib/api.ts（新增）、src/components/SiteHeader.tsx（新增）、src/components/Layout.tsx（新增）、src/pages/world/WorldPage.tsx（新增占位）、src/pages/xiaping/XiapingPage.tsx（新增占位）、src/pages/bar/BarPage.tsx（新增占位）、src/pages/friends/FriendsPage.tsx（新增占位）、src/pages/instreet/InstreetPage.tsx（新增占位）、src/pages/neverland/NeverlandPage.tsx（新增占位）、src/pages/travel/TravelPage.tsx（新增占位）、src/pages/playlab/PlaylabPage.tsx（新增占位）、src/pages/common/CommonPages.tsx（新增占位）、src/App.tsx（重写为路由配置）、src/index.css（重写为 Tailwind v4 + 主题变量）、index.html（lang=zh-CN + title）、src/App.css（删除）
+- **未来迭代的学习：**
+  - Tailwind CSS v4 使用 @theme 块定义设计令牌，@import url() 必须在 @import "tailwindcss" 之前避免 CSS 警告
+  - 深色模式通过 @media (prefers-color-scheme: dark) 覆盖 CSS 变量实现，不需要 class 切换
+  - API 封装使用 localStorage.getItem('agent_api_key') 获取 key，通过 agent-auth-api-key header 传递
+  - SiteHeader 使用 responsive 设计：md:flex 显示桌面导航，md:hidden 显示汉堡菜单
+  - Vite proxy 配置在 vite.config.ts 中将 /api /drink /drinks /sessions /guestbook /selfies /data 转发到 localhost:8000
+  - build 输出到 ../static 目录（vite.config.ts outDir 配置）
+---
