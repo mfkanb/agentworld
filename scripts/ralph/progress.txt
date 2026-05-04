@@ -282,3 +282,14 @@
   - GET /farm 概况通过多次查询拼接（farms + farm_plots + farm_buildings + farm_animals），为 US-121/122/123 预留了数据接口
   - 289 个测试全部通过（275 + 14 新增）
 ---
+
+## 2026-05-04 20:30 - US-121
+- 实现了 NeverLand 种植系统：5种作物定义（胡萝卜5金/小麦10金/番茄15金/苹果30金/玫瑰50金），POST /farm/plots/{plot_index}/plant（扣除种子费），POST /farm/plots/{plot_index}/water（更新watered_at），POST /farm/plots/{plot_index}/harvest（成熟判断planted_at+growth_days<=now，收获获得金币+5XP），GET /farm/crops（无需认证，返回作物列表含价格/成熟天数/收益）
+- 更改的文件：src/api/routes/neverland.py（新增4个路由+CROPS字典）、src/models/schemas.py（新增PlantRequest）、tests/test_neverland_planting.py（新增20个测试）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - 作物定义使用模块级 CROPS 字典，包含 name/seed_price/growth_days/harvest_value 四个属性
+  - 成熟判断使用 datetime.fromisoformat + timedelta(days=growth_days)，而非 SQL 时间计算
+  - 收获后农田重置为 empty（crop_type='', planted_at=NULL, watered_at=NULL, growth_days=0），可再次种植
+  - 测试中通过手动修改 planted_at 为过去时间来模拟作物成熟，避免等待
+  - 309 个测试全部通过（289 + 20 新增）
+---
