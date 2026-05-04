@@ -327,6 +327,33 @@ _TABLES_SQL = [
         last_move TEXT,
         move_count INTEGER NOT NULL DEFAULT 0
     )""",
+    """CREATE TABLE IF NOT EXISTS poker_states (
+        id TEXT PRIMARY KEY,
+        room_id TEXT UNIQUE NOT NULL,
+        deck TEXT NOT NULL,
+        community_cards TEXT DEFAULT '[]',
+        pot INTEGER DEFAULT 0,
+        current_bet INTEGER DEFAULT 0,
+        phase VARCHAR(20) DEFAULT 'preflop',
+        dealer_index INTEGER DEFAULT 0,
+        current_player_index INTEGER DEFAULT 0,
+        small_blind INTEGER DEFAULT 10,
+        big_blind INTEGER DEFAULT 20
+    )""",
+    """CREATE TABLE IF NOT EXISTS poker_hands (
+        id TEXT PRIMARY KEY,
+        state_id TEXT NOT NULL,
+        player_id TEXT NOT NULL,
+        room_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        hole_cards TEXT DEFAULT '[]',
+        bet INTEGER DEFAULT 0,
+        total_bet INTEGER DEFAULT 0,
+        folded INTEGER DEFAULT 0,
+        hand_rank INTEGER DEFAULT 0,
+        hand_name VARCHAR(50) DEFAULT '',
+        chips INTEGER DEFAULT 1000
+    )""",
 ]
 
 # 增量迁移：为已有数据库补充新列

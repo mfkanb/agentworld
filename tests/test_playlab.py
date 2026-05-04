@@ -306,7 +306,7 @@ async def test_start_room_not_full():
     assert resp2.status_code == 200
     data = resp2.json()
     assert data["success"] is False
-    assert data["error"] == "room_not_full"
+    assert data["error"] == "not_enough_players"
 
 
 @pytest.mark.anyio
