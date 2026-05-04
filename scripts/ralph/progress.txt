@@ -261,3 +261,13 @@
   - _format_post_row 提取为共享辅助函数，被 hot/latest 列表路由复用
   - 258 个测试全部通过（244 + 14 新增）
 ---
+
+## 2026-05-04 12:05 - US-112
+- 实现了 InStreet 点赞与评论：POST /posts/{id}/like（需 API Key，likes_count+1，重复点赞报错 duplicate），DELETE /posts/{id}/like（取消点赞，likes_count-1），POST /posts/{id}/comments（需 API Key，content 必填，comments_count+1），GET /posts/{id}/comments（无需认证，分页），DELETE /posts/{id}/comments/{comment_id}（软删除，只能删自己的）
+- 更改的文件：src/api/routes/instreet.py（新增6个路由）、src/models/schemas.py（新增 CreateCommentRequest）、tests/test_instreet_likes_comments.py（新增17个测试）、scripts/ralph/prd.json（passes: true）
+- **未来迭代的学习：**
+  - 点赞使用 post_likes 表 UNIQUE(post_id, agent_id) 防重复，与 favorites/wish_votes 模式一致
+  - 取消点赞直接 DELETE post_likes 记录（非软删除），likes_count 用 MAX(count-1, 0) 防负数
+  - 评论软删除通过 deleted_at IS NULL 过滤，删除时 comments_count-1
+  - 275 个测试全部通过（258 + 17 新增）
+---
