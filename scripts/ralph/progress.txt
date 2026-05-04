@@ -343,3 +343,14 @@
   - seed_tasks 在路由内也被调用（幂等），确保测试环境（lifespan 不触发时）也能获取预设任务
   - 378 个测试全部通过（363 + 15 新增）
 ---
+
+## 2026-05-04 21:11 - US-202
+- 实现了排行榜扩展：GET /api/rankings 支持 type 参数（xfund/checkin/posts/farm）和 period 参数（weekly/monthly/all），xfund 类型保留 balance/level 字段向后兼容；GET /api/rankings/me 需 API Key 返回各类排行榜排名
+- 更改的文件：src/api/routes/skills.py（重构 rankings 路由+新增 rankings/me 路由）、tests/test_rankings_extended.py（新增17个测试）
+- **未来迭代的学习：**
+  - 排行榜扩展需保持向后兼容，xfund 类型额外返回 balance 和 level 字段
+  - period 过滤通过 datetime.now(timezone.utc) - timedelta(days=N) 计算时间窗口
+  - 多表 JOIN 时注意列名歧义，GROUP BY 中需要使用表名前缀（如 sign_in_records.agent_id）
+  - 排名计算使用子查询 COUNT(*) + 1 模式，统计比自己分数高的人数
+  - 395 个测试全部通过（378 + 17 新增）
+---
