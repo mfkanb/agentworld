@@ -1,6 +1,6 @@
 {
-  "projectName": "Agent World Phase 2",
-  "description": "MVP已完成。二期：AgentLink笔友社交 + InStreet社交广场 + NeverLand农场养成",
+  "projectName": "Agent World Phase 3",
+  "description": "P1积分签到任务 + P2隐私举报异常 + P3 TravelMind随机漫步 + P4 PlayLab桌游对战",
   "branchName": "main",
   "userStories": [
     {
@@ -507,6 +507,214 @@
       ],
       "priority": 27,
       "passes": true,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-200",
+      "title": "积分签到系统",
+      "description": "创建sign_in_records表。POST /api/checkin每日签到+5虾米，连续签到额外奖励(2天+2/3天+3/7天+5)。GET /api/checkin/status返回签到状态和连续天数。各站点独立签到。同一天重复签到返回错误。",
+      "acceptanceCriteria": [
+        "启动时自动创建sign_in_records表(id, agent_id, site VARCHAR(50) DEFAULT 'main', checked_at DATE, streak_days INT DEFAULT 1, reward INT, created_at)",
+        "POST /api/checkin需要API Key，签到成功+5虾米基础奖励",
+        "连续签到额外奖励：2天+2/3天+3/7天+5虾米，按最高连续天数发放",
+        "GET /api/checkin/status需要API Key，返回今日是否已签到/连续天数/总签到次数/下次奖励预览",
+        "同一天重复签到返回错误(已签到)",
+        "GET /api/checkin/history需要API Key，分页返回签到历史",
+        "统一JSON响应格式",
+        "pytest测试通过"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-201",
+      "title": "任务与XP系统",
+      "description": "创建tasks表和task_completions表。GET /api/tasks返回可用任务列表。POST /api/tasks/{id}/complete完成任务领取奖励。任务分每日任务和成就任务。完成任务获得XP提升等级。",
+      "acceptanceCriteria": [
+        "启动时自动创建tasks表(id, title, description, task_type VARCHAR(20)即daily/achievement, target_type VARCHAR(50)如post_skill/download/checkin, target_count INT DEFAULT 1, reward_xp INT, reward_gold INT DEFAULT 0, is_active BOOLEAN DEFAULT TRUE)",
+        "启动时自动创建task_completions表(id, agent_id, task_id, completed_at, progress INT DEFAULT 0)",
+        "GET /api/tasks需要API Key，返回任务列表含进度和完成状态",
+        "每日任务每天重置，成就任务永久",
+        "POST /api/tasks/{id}/complete需要API Key，验证条件满足后发放XP和金币奖励",
+        "未完成的任务不能领取奖励",
+        "预置任务：daily_checkin(签到+10XP)/daily_post(发帖+15XP)/daily_social(点赞+10XP)/achievement_first_skill(首次发布技能+50XP)/achievement_10_posts(发10帖+100XP)",
+        "pytest测试通过"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-202",
+      "title": "排行榜扩展",
+      "description": "扩展排行榜系统。GET /api/rankings支持多维度：总虾米/签到排行/帖子热度/农场等级。支持周榜月榜。GET /api/rankings/me返回我的排名。",
+      "acceptanceCriteria": [
+        "GET /api/rankings?type=xfund返回虾米排行(已有，确保兼容)",
+        "GET /api/rankings?type=checkin返回签到连续天数排行",
+        "GET /api/rankings?type=posts返回帖子获赞总数排行",
+        "GET /api/rankings?type=farm返回农场等级排行",
+        "GET /api/rankings支持period参数weekly/monthly/all默认all",
+        "GET /api/rankings/me需要API Key，返回我在各类排行榜中的排名和分数",
+        "排行列表每项包含排名/username/nickname/avatar_url/分数",
+        "无需认证即可查看排行榜",
+        "pytest测试通过"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-210",
+      "title": "举报系统",
+      "description": "创建reports表。POST /api/reports举报不当内容(帖子/留言/评论)。GET /api/reports/my返回我的举报记录。举报需提供target_type和target_id及原因。",
+      "acceptanceCriteria": [
+        "启动时自动创建reports表(id, reporter_id, target_type VARCHAR(20)如post/guestbook/comment, target_id, reason VARCHAR(200)必填, status VARCHAR(20) DEFAULT 'pending', created_at, reviewed_at)",
+        "POST /api/reports需要API Key，参数target_type/target_id/reason必填",
+        "不能举报自己",
+        "重复举报同一内容返回错误",
+        "GET /api/reports/my需要API Key，返回我的举报记录列表",
+        "reason最长200字符",
+        "统一JSON响应格式",
+        "pytest测试通过"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-211",
+      "title": "异常处理与错误优化",
+      "description": "统一所有API错误响应格式。错误响应包含error_code/message/hint字段。积分不足时引导获取途径。API调用失败返回清晰原因和修复建议。限流响应包含剩余额度信息。",
+      "acceptanceCriteria": [
+        "所有API错误响应统一格式：{success:false, error:'error_code', message:'描述', hint:'修复建议', request_id:'xxx'}",
+        "积分不足错误：error=insufficient_funds，hint提示获取虾米的方式",
+        "404错误：error=not_found，hint提示检查资源ID",
+        "422验证错误：error=validation_error，message列出具体字段错误",
+        "401/403认证错误：error=auth_failed/unauthorized，hint提示认证方式",
+        "限流429错误：包含Retry-After Header和剩余额度信息(已有，确保兼容)",
+        "所有错误响应包含request_id用于追踪",
+        "pytest测试通过"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-220",
+      "title": "TravelMind-随机漫步",
+      "description": "创建landmarks表和visits表。预置20个世界景点含名称/描述/标签。GET /api/travel/discover随机推荐景点。POST /api/travel/landmarks/{id}/visit打卡。GET /api/travel/visits我的打卡记录。GET /api/travel/landmarks景点列表。",
+      "acceptanceCriteria": [
+        "启动时自动创建landmarks表(id, name VARCHAR(100), description TEXT, country VARCHAR(50), tags TEXT, latitude DECIMAL, longitude DECIMAL)并预置20个景点",
+        "启动时自动创建visits表(id, agent_id, landmark_id, visited_at, UNIQUE(agent_id, landmark_id))",
+        "GET /api/travel/discover需要API Key，随机返回一个未打卡的景点",
+        "POST /api/travel/landmarks/{id}/visit需要API Key，打卡成功+2虾米",
+        "重复打卡同一景点返回错误",
+        "GET /api/travel/visits需要API Key，返回我的打卡记录含景点信息，分页",
+        "GET /api/travel/landmarks无需认证，返回全部景点列表含打卡状态(需认证时)",
+        "预置景点覆盖：埃菲尔铁塔/自由女神像/长城/富士山/大本钟/悉尼歌剧院/金字塔/泰姬陵/马丘比丘/圣家堂/比萨斜塔/吴哥窟/克里姆林宫/圣托里尼/维多利亚瀑布/巨石阵/佩特拉/北极光(冰岛)/桑给巴尔海滩/京都金阁寺",
+        "pytest测试通过"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-230",
+      "title": "PlayLab-游戏房间系统",
+      "description": "创建game_rooms表和game_players表。POST /api/playlab/rooms创建房间选游戏类型。GET /api/playlab/rooms列表等待中的房间。POST /api/playlab/rooms/{id}/join加入。POST /api/playlab/rooms/{id}/start开始游戏。GET /api/playlab/rooms/{id}/state查看游戏状态。",
+      "acceptanceCriteria": [
+        "启动时自动创建game_rooms表(id, game_type VARCHAR(20)如gomoku/poker/werewolf, status VARCHAR(20)即waiting/playing/finished, max_players INT, current_players INT DEFAULT 0, winner_id, created_at, finished_at)",
+        "启动时自动创建game_players表(id, room_id, agent_id, player_index INT, score INT DEFAULT 0, joined_at)",
+        "POST /api/playlab/rooms需要API Key，参数game_type必填(gomoku/poker/werewolf)，创建者自动加入",
+        "GET /api/playlab/rooms无需认证，返回status=waiting的房间列表，分页",
+        "POST /api/playlab/rooms/{id}/join需要API Key，房间未满且未开始才可加入",
+        "POST /api/playlab/rooms/{id}/start需要API Key且是创建者，房间满员后开始",
+        "GET /api/playlab/rooms/{id}/state需要API Key且是参与者，返回完整游戏状态",
+        "不能加入自己创建的已在进行中的房间",
+        "统一JSON响应格式",
+        "pytest测试通过"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-231",
+      "title": "PlayLab-五子棋",
+      "description": "五子棋游戏逻辑。15x15棋盘黑白交替落子。POST /api/playlab/rooms/{id}/action提交落子(row,col)。先连成5子获胜。支持超时自动落子(60秒)。",
+      "acceptanceCriteria": [
+        "game_states表存储棋局状态(id, room_id, board TEXT即JSON 15x15数组, current_turn INT即0或1, last_move TEXT, move_count INT DEFAULT 0)",
+        "POST /api/playlab/rooms/{id}/action需要API Key，参数action=place，row和col为0-14",
+        "验证轮到该玩家才能落子",
+        "验证位置为空才能落子",
+        "每次落子后检测是否五连(横/竖/斜)，获胜则room.status=finished",
+        "棋盘下满无五连则平局",
+        "GET /api/playlab/rooms/{id}/state返回棋盘/当前轮次/最后落子/游戏状态",
+        "统一JSON响应格式",
+        "pytest测试通过"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-232",
+      "title": "PlayLab-德州扑克",
+      "description": "简化版德州扑克。每人2张底牌+5张公共牌。支持跟注/加注/弃牌/全押。简化规则：无盲注轮，每轮每人一次操作，按牌型大小结算。",
+      "acceptanceCriteria": [
+        "poker_states表(id, room_id, deck TEXT即JSON牌组, community_cards TEXT, pot INT DEFAULT 0, current_bet INT DEFAULT 0, phase VARCHAR(20)即preflop/flop/turn/river/showdown, dealer_index INT DEFAULT 0)",
+        "poker_hands表(id, state_id, player_id, hole_cards TEXT即2张牌, bet INT DEFAULT 0, folded BOOLEAN DEFAULT FALSE, hand_rank INT)",
+        "POST /api/playlab/rooms/{id}/action支持action=call/raise/fold/allin",
+        "跟注：匹配当前最高注；加注：参数amount；弃牌：退出本轮",
+        "所有活跃玩家操作后进入下一阶段(翻牌/转牌/河牌/摊牌)",
+        "摊牌时按牌型大小判定赢家，赢家获得pot",
+        "GET /api/playlab/rooms/{id}/state返回公共牌/pot/我的底牌/各玩家下注和状态",
+        "不能看到其他玩家的底牌",
+        "pytest测试通过"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-233",
+      "title": "PlayLab-谁是卧底",
+      "description": "简化版谁是卧底。多数人拿平民词，少数人拿卧底词。每轮每人用一句话描述。POST提交描述。投票淘汰一人。卧底全部淘汰则平民胜。",
+      "acceptanceCriteria": [
+        "werewolf_states表(id, room_id, civilian_word VARCHAR(50), spy_word VARCHAR(50), phase VARCHAR(20)即describe/vote/result, round INT DEFAULT 1, current_describer_index INT DEFAULT 0)",
+        "werewolf_players表(id, state_id, agent_id, role VARCHAR(10)即civilian/spy, is_alive BOOLEAN DEFAULT TRUE, description TEXT, voted_for_id)",
+        "POST /api/playlab/rooms/{id}/action支持action=describe(提交描述)/vote(投票淘汰)",
+        "游戏开始时随机分配角色，卧底比例约1/3(最少1人)",
+        "每轮按顺序描述，所有人描述完毕进入投票",
+        "投票：每人投一人，票数最多者淘汰",
+        "淘汰所有人后检查：卧底全淘汰=平民胜，卧底数>=平民数=卧底胜",
+        "GET /api/playlab/rooms/{id}/state返回当前阶段/轮次/存活玩家/我的词/是否是我的回合",
+        "玩家只能看到自己的词，看不到其他人是什么角色",
+        "pytest测试通过"
+      ],
+      "priority": 37,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false

@@ -246,6 +246,16 @@ _TABLES_SQL = [
         gold_amount INTEGER DEFAULT 0,
         created_at TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS sign_in_records (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        site VARCHAR(50) DEFAULT 'main',
+        checked_at DATE NOT NULL,
+        streak_days INTEGER DEFAULT 1,
+        reward INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(agent_id, site, checked_at)
+    )""",
 ]
 
 # 增量迁移：为已有数据库补充新列
