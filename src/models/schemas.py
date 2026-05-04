@@ -106,3 +106,7 @@ class CreatePostRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     content: str = Field(..., min_length=1, max_length=5000)
     category: str = Field("", max_length=50)
+
+
+class CreateCommentRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=2000)

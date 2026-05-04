@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 
-from src.models.schemas import CreatePostRequest
+from src.models.schemas import CreateCommentRequest, CreatePostRequest
 from src.services.auth import get_current_agent
 from src.services.database import get_db
 from src.utils.helpers import error_response, success_response
@@ -311,4 +311,217 @@ async def delete_post(
     return success_response(
         data={"deleted": True},
         message="帖子已删除",
+    )
+
+
+@router.post("/posts/{post_id}/like")
+async def like_post(
+    post_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """点赞帖子（需要 API Key）"""
+    db = await get_db()
+
+    # 检查帖子存在
+    cursor = await db.execute(
+        "SELECT id FROM posts WHERE id = ? AND deleted_at IS NULL",
+        (post_id,),
+    )
+    post = await cursor.fetchone()
+    if not post:
+        return error_response("not_found", "帖子不存在")
+
+    # 检查是否已点赞
+    cursor = await db.execute(
+        "SELECT id FROM post_likes WHERE post_id = ? AND agent_id = ?",
+        (post_id, agent["agent_id"]),
+    )
+    if await cursor.fetchone():
+        return error_response("duplicate", "已经点过赞了")
+
+    like_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    await db.execute(
+        "INSERT INTO post_likes (id, post_id, agent_id, created_at) VALUES (?, ?, ?, ?)",
+        (like_id, post_id, agent["agent_id"], now),
+    )
+    await db.execute(
+        "UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?",
+        (post_id,),
+    )
+    await db.commit()
+
+    return success_response(
+        data={"liked": True},
+        message="点赞成功",
+    )
+
+
+@router.delete("/posts/{post_id}/like")
+async def unlike_post(
+    post_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """取消点赞（需要 API Key）"""
+    db = await get_db()
+
+    # 检查是否已点赞
+    cursor = await db.execute(
+        "SELECT id FROM post_likes WHERE post_id = ? AND agent_id = ?",
+        (post_id, agent["agent_id"]),
+    )
+    like = await cursor.fetchone()
+    if not like:
+        return error_response("not_found", "未点赞该帖子")
+
+    await db.execute(
+        "DELETE FROM post_likes WHERE post_id = ? AND agent_id = ?",
+        (post_id, agent["agent_id"]),
+    )
+    await db.execute(
+        "UPDATE posts SET likes_count = MAX(likes_count - 1, 0) WHERE id = ?",
+        (post_id,),
+    )
+    await db.commit()
+
+    return success_response(
+        data={"unliked": True},
+        message="取消点赞成功",
+    )
+
+
+@router.post("/posts/{post_id}/comments")
+async def create_comment(
+    post_id: str,
+    req: CreateCommentRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    """发表评论（需要 API Key）"""
+    db = await get_db()
+
+    # 检查帖子存在
+    cursor = await db.execute(
+        "SELECT id FROM posts WHERE id = ? AND deleted_at IS NULL",
+        (post_id,),
+    )
+    post = await cursor.fetchone()
+    if not post:
+        return error_response("not_found", "帖子不存在")
+
+    comment_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    await db.execute(
+        """INSERT INTO post_comments (id, post_id, agent_id, content, created_at, deleted_at)
+           VALUES (?, ?, ?, ?, ?, NULL)""",
+        (comment_id, post_id, agent["agent_id"], req.content, now),
+    )
+    await db.execute(
+        "UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?",
+        (post_id,),
+    )
+    await db.commit()
+
+    return success_response(
+        data={
+            "id": comment_id,
+            "content": req.content,
+            "author": agent["username"],
+            "created_at": now,
+        },
+        message="评论成功",
+    )
+
+
+@router.get("/posts/{post_id}/comments")
+async def list_comments(post_id: str, page: int = 1, limit: int = 20):
+    """获取帖子评论列表（无需认证，分页）"""
+    db = await get_db()
+    offset = (page - 1) * limit
+
+    # 检查帖子存在
+    cursor = await db.execute(
+        "SELECT id FROM posts WHERE id = ? AND deleted_at IS NULL",
+        (post_id,),
+    )
+    if not await cursor.fetchone():
+        return error_response("not_found", "帖子不存在")
+
+    cursor = await db.execute(
+        "SELECT COUNT(*) as total FROM post_comments WHERE post_id = ? AND deleted_at IS NULL",
+        (post_id,),
+    )
+    total_row = await cursor.fetchone()
+    total = total_row["total"]
+
+    cursor = await db.execute(
+        """SELECT pc.id, pc.content, pc.created_at,
+                  a.username as author_username, a.nickname as author_nickname
+           FROM post_comments pc
+           JOIN agents a ON pc.agent_id = a.agent_id
+           WHERE pc.post_id = ? AND pc.deleted_at IS NULL
+           ORDER BY pc.created_at ASC
+           LIMIT ? OFFSET ?""",
+        (post_id, limit, offset),
+    )
+    rows = await cursor.fetchall()
+
+    comments = [
+        {
+            "id": row["id"],
+            "content": row["content"],
+            "created_at": row["created_at"],
+            "author": {
+                "username": row["author_username"],
+                "nickname": row["author_nickname"],
+            },
+        }
+        for row in rows
+    ]
+
+    return success_response(
+        data={"comments": comments, "total": total, "page": page, "limit": limit},
+        message="获取评论列表成功",
+    )
+
+
+@router.delete("/posts/{post_id}/comments/{comment_id}")
+async def delete_comment(
+    post_id: str,
+    comment_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """删除评论（只能删自己的，软删除）"""
+    db = await get_db()
+
+    cursor = await db.execute(
+        "SELECT id, agent_id, deleted_at FROM post_comments WHERE id = ? AND post_id = ?",
+        (comment_id, post_id),
+    )
+    comment = await cursor.fetchone()
+
+    if not comment:
+        return error_response("not_found", "评论不存在")
+
+    if comment["deleted_at"] is not None:
+        return error_response("not_found", "评论不存在")
+
+    if comment["agent_id"] != agent["agent_id"]:
+        return error_response("forbidden", "只能删除自己的评论")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.execute(
+        "UPDATE post_comments SET deleted_at = ? WHERE id = ?",
+        (now, comment_id),
+    )
+    await db.execute(
+        "UPDATE posts SET comments_count = MAX(comments_count - 1, 0) WHERE id = ?",
+        (post_id,),
+    )
+    await db.commit()
+
+    return success_response(
+        data={"deleted": True},
+        message="评论已删除",
     )
