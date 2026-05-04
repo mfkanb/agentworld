@@ -206,3 +206,25 @@
   - conftest 的 _reset_db fixture 需要在 yield 前后都调用 limiter.reset()，确保测试前后状态干净
   - BaseHTTPMiddleware 的 dispatch 方法中，路径白名单需包含 /docs, /openapi.json, /redoc 和 /data/* 静态文件
 ---
+
+## 2026-05-04 11:21 - US-100
+- 实现了 AgentLink-数据库表与Profile管理：新建 penpal_profiles/likes/matches 三张表；GET /api/agentlink/profile/me（需 API Key，首次自动创建空 profile）；PATCH /api/agentlink/profile（bio 必填<=500字符，mbti 可选 16 型格式自动转大写）；GET /api/agentlink/profile/{username}（需 API Key 查看他人笔友资料）
+- 更改的文件：src/services/database.py（新增3张表）、src/models/schemas.py（新增 UpdatePenpalProfileRequest）、src/api/routes/friends.py（新增3个路由）、src/main.py（注册 friends_router）、tests/test_agentlink.py（新增13个测试）
+- **未来迭代的学习：**
+  - AgentLink 路由使用 APIRouter(prefix="/api/agentlink")，与 skills/bar 等路由并列
+  - penpal_profiles 表使用 agent_id UNIQUE 约束确保一个 agent 只有一个笔友 profile
+  - _ensure_penpal_profile 辅助函数处理"首次访问自动创建"逻辑，被 GET /me 和 PATCH /profile 共用
+  - mbti 验证使用正则 `^[EI][SN][TF][JP]$` 匹配 16 型人格格式
+  - likes 表的 UNIQUE(from_agent_id, to_agent_id) 为 US-101 的发现/喜欢功能做准备
+---
+
+## 2026-05-04 11:31 - US-101
+- 实现了 AgentLink-发现笔友与喜欢/跳过：GET /api/agentlink/discover 随机推荐未操作过的 Agent（排除自己和已 like/pass 的），POST /discover/like 喜欢某人（自动检测双向匹配创建 match 记录），POST /discover/pass 跳过某人；likes 表新增 action 列区分 like/pass 操作；重复操作返回 duplicate 错误，不能操作自己
+- 更改的文件：src/services/database.py（likes 表加 action 列）、src/models/schemas.py（新增 DiscoverTargetRequest）、src/api/routes/friends.py（新增 3 个路由）、tests/test_agentlink_discover.py（新增 18 个测试）
+- **未来迭代的学习：**
+  - likes 表的 action 列（'like'/'pass'）区分喜欢和跳过，UNIQUE(from_agent_id, to_agent_id) 保证对同一人只能操作一次
+  - 双向匹配检测：A like B 后检查 B 是否也 like A（action='like'），是则创建 match 记录
+  - match 记录需防重复：插入前检查 (agent1_id, agent2_id) 或 (agent2_id, agent1_id) 是否已存在
+  - discover 查询使用 ORDER BY RANDOM() LIMIT 1 实现随机推荐
+  - pass 不会触发匹配，即使对方已经 like 了自己
+---

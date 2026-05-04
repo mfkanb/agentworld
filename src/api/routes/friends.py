@@ -326,3 +326,121 @@ async def pass_penpal(
         data={"passed": True},
         message="已跳过",
     )
+
+
+@router.get("/matches")
+async def get_matches(agent: dict = Depends(get_current_agent)):
+    """获取互相匹配的 Agent 列表"""
+    db = await get_db()
+    my_id = agent["agent_id"]
+
+    cursor = await db.execute(
+        """SELECT m.id, m.created_at,
+                  CASE WHEN m.agent1_id = ? THEN m.agent2_id ELSE m.agent1_id END AS partner_id
+           FROM matches m
+           WHERE m.agent1_id = ? OR m.agent2_id = ?
+           ORDER BY m.created_at DESC""",
+        (my_id, my_id, my_id),
+    )
+    match_rows = await cursor.fetchall()
+
+    matches = []
+    for row in match_rows:
+        partner_id = row["partner_id"]
+        # 获取对方 agent 信息
+        cursor = await db.execute(
+            "SELECT agent_id, username, nickname, avatar_url FROM agents WHERE agent_id = ?",
+            (partner_id,),
+        )
+        partner = await cursor.fetchone()
+        if not partner:
+            continue
+
+        matches.append({
+            "match_id": row["id"],
+            "username": partner["username"],
+            "nickname": partner["nickname"],
+            "avatar_url": partner["avatar_url"],
+            "proxy_email": f"{partner['username']}@agentlink.world",
+            "matched_at": row["created_at"],
+        })
+
+    return success_response(
+        data={"matches": matches, "total": len(matches)},
+        message="获取匹配列表成功",
+    )
+
+
+@router.get("/matches/pending")
+async def get_pending_likes(agent: dict = Depends(get_current_agent)):
+    """获取喜欢了我但我还没操作的 Agent 列表"""
+    db = await get_db()
+    my_id = agent["agent_id"]
+
+    # 找出喜欢了我的人
+    cursor = await db.execute(
+        """SELECT l.id, l.from_agent_id, l.created_at
+           FROM likes l
+           WHERE l.to_agent_id = ? AND l.action = 'like'
+             AND l.from_agent_id NOT IN (
+                 SELECT to_agent_id FROM likes WHERE from_agent_id = ?
+             )
+           ORDER BY l.created_at DESC""",
+        (my_id, my_id),
+    )
+    pending_rows = await cursor.fetchall()
+
+    pending = []
+    for row in pending_rows:
+        from_id = row["from_agent_id"]
+        cursor = await db.execute(
+            "SELECT agent_id, username, nickname, avatar_url FROM agents WHERE agent_id = ?",
+            (from_id,),
+        )
+        from_agent = await cursor.fetchone()
+        if not from_agent:
+            continue
+
+        pending.append({
+            "like_id": row["id"],
+            "username": from_agent["username"],
+            "nickname": from_agent["nickname"],
+            "avatar_url": from_agent["avatar_url"],
+            "liked_at": row["created_at"],
+        })
+
+    return success_response(
+        data={"pending": pending, "total": len(pending)},
+        message="获取喜欢你的人列表成功",
+    )
+
+
+@router.delete("/matches/{match_id}")
+async def unmatch(
+    match_id: str,
+    agent: dict = Depends(get_current_agent),
+):
+    """解除匹配"""
+    db = await get_db()
+    my_id = agent["agent_id"]
+
+    # 查找 match 记录，确保是自己的匹配
+    cursor = await db.execute(
+        "SELECT id, agent1_id, agent2_id FROM matches WHERE id = ?",
+        (match_id,),
+    )
+    match_row = await cursor.fetchone()
+    if not match_row:
+        return error_response("not_found", "匹配记录不存在")
+
+    if match_row["agent1_id"] != my_id and match_row["agent2_id"] != my_id:
+        return error_response("forbidden", "不能解除他人的匹配")
+
+    # 删除 match 记录
+    await db.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+    await db.commit()
+
+    return success_response(
+        data={"unmatched": True},
+        message="已解除匹配",
+    )

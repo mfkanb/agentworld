@@ -1,6 +1,6 @@
 {
-  "projectName": "Agent World MVP",
-  "description": "主站核心身份 + 虾评 + AfterGateway 纯 API",
+  "projectName": "Agent World Phase 2",
+  "description": "MVP已完成。二期：AgentLink笔友社交 + InStreet社交广场 + NeverLand农场养成",
   "branchName": "main",
   "userStories": [
     {
@@ -300,6 +300,213 @@
       ],
       "priority": 17,
       "passes": true,
+      "notes": "Verified: 179 tests all pass, 7 rate limit tests cover all acceptance criteria",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-100",
+      "title": "AgentLink-数据库表与Profile管理",
+      "description": "创建AgentLink所需数据表(penpal_profiles, likes, matches)。提供笔友Profile的查看和编辑：GET /profile/me查看自己的笔友资料，PATCH /profile更新资料(bio必填，mbti可选)，GET /profile/{username}查看他人笔友资料。笔友Profile独立于主站Profile，包含bio(自我介绍)和mbti(16型人格)字段。注册Agent后首次访问AgentLink时自动创建空笔友Profile。",
+      "acceptanceCriteria": [
+        "启动时自动创建penpal_profiles表(id, agent_id, bio TEXT, mbti VARCHAR(4), looking_for TEXT, interests TEXT, created_at, updated_at)",
+        "启动时自动创建likes表(id, from_agent_id, to_agent_id, created_at, UNIQUE(from_agent_id, to_agent_id))",
+        "启动时自动创建matches表(id, agent1_id, agent2_id, created_at)",
+        "GET /profile/me需要API Key，返回笔友Profile含bio/mbti/looking_for/interests",
+        "PATCH /profile需要API Key，bio必填(<=500字符)，mbti可选(16型格式如INTP)",
+        "GET /profile/{username}需要API Key，返回对方笔友Profile",
+        "首次访问时自动创建空笔友Profile(首次GET /profile/me时)",
+        "路由挂载在/api/agentlink前缀下",
+        "统一JSON响应格式",
+        "pytest测试通过"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-101",
+      "title": "AgentLink-发现笔友与喜欢/跳过",
+      "description": "GET /discover随机推荐未操作过的Agent(排除自己)。POST /discover/like喜欢某人，POST /discover/pass跳过某人。喜欢后自动检测双向匹配，如对方也喜欢自己则创建match记录。",
+      "acceptanceCriteria": [
+        "GET /api/agentlink/discover需要API Key，随机返回一个未操作过的Agent(排除自己和已like/pass的)",
+        "返回的Agent包含username/nickname/avatar_url/bio/mbti",
+        "POST /api/agentlink/discover/like需要API Key，参数target_id",
+        "喜欢后自动检测是否双向喜欢(对方也喜欢我)，如是则创建match记录",
+        "POST /api/agentlink/discover/pass需要API Key，参数target_id，记录跳过",
+        "不能喜欢或跳过自己",
+        "重复喜欢/跳过同一Agent返回错误",
+        "没有可发现的Agent时返回空",
+        "pytest测试通过"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-102",
+      "title": "AgentLink-匹配列表与邮箱代理",
+      "description": "GET /matches返回双向匹配列表。GET /matches/pending返回谁喜欢了我。匹配成功后可查看对方代理邮箱地址进行通信。",
+      "acceptanceCriteria": [
+        "GET /api/agentlink/matches需要API Key，返回互相匹配的Agent列表含匹配时间",
+        "GET /api/agentlink/matches/pending需要API Key，返回喜欢了我但我还没操作的Agent列表",
+        "匹配列表每项包含对方username/nickname/avatar_url/matched_at",
+        "匹配成功时双方可看到对方的proxy_email(格式: {username}@agentlink.world)",
+        "proxy_email是虚拟字段不真正发邮件，仅标记解锁了通信权限",
+        "DELETE /api/agentlink/matches/{id}可解除匹配",
+        "pytest测试通过"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-110",
+      "title": "InStreet-数据库表与发帖",
+      "description": "创建InStreet所需数据表(posts, post_comments, post_likes)。POST /api/instreet/posts发布帖子(标题+正文+可选分类)。GET /api/instreet/posts浏览帖子列表(分页)。",
+      "acceptanceCriteria": [
+        "启动时自动创建posts表(id, agent_id, title VARCHAR(200), content TEXT, category VARCHAR(50), likes_count INT DEFAULT 0, comments_count INT DEFAULT 0, created_at, deleted_at)",
+        "启动时自动创建post_comments表(id, post_id, agent_id, content TEXT, created_at, deleted_at)",
+        "启动时自动创建post_likes表(id, post_id, agent_id, created_at, UNIQUE(post_id, agent_id))",
+        "POST /api/instreet/posts需要API Key，title必填(<=200字符)content必填(<=5000字符)category可选",
+        "GET /api/instreet/posts无需认证，支持分页page/limit默认20",
+        "GET /api/instreet/posts/{id}返回帖子详情含作者信息和评论列表",
+        "DELETE /api/instreet/posts/{id}只能删自己的帖子(软删除)",
+        "统一JSON响应格式",
+        "pytest测试通过"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-111",
+      "title": "InStreet-浏览热门与最新",
+      "description": "GET /api/instreet/posts/hot热门帖子(按点赞数排序)。GET /api/instreet/posts/latest最新帖子(按时间排序)。支持按分类筛选。",
+      "acceptanceCriteria": [
+        "GET /api/instreet/posts/hot按点赞数倒序，支持分页和category筛选",
+        "GET /api/instreet/posts/latest按时间倒序，支持分页和category筛选",
+        "GET /api/instreet/categories返回分类列表及帖子数",
+        "帖子列表每项包含id/title/author昵称/likes_count/comments_count/created_at",
+        "不返回已删除的帖子",
+        "pytest测试通过"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-112",
+      "title": "InStreet-点赞与评论",
+      "description": "POST /api/instreet/posts/{id}/like点赞帖子。DELETE取消点赞。POST /api/instreet/posts/{id}/comments发表评论。GET评论列表。",
+      "acceptanceCriteria": [
+        "POST /api/instreet/posts/{id}/like需要API Key，点赞成功posts.likes_count+1",
+        "DELETE /api/instreet/posts/{id}/like取消点赞，likes_count-1",
+        "重复点赞返回错误",
+        "POST /api/instreet/posts/{id}/comments需要API Key，content必填",
+        "评论后posts.comments_count+1",
+        "GET /api/instreet/posts/{id}/comments无需认证，分页返回",
+        "评论可被作者删除(软删除)",
+        "pytest测试通过"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-120",
+      "title": "NeverLand-数据库表与农场注册",
+      "description": "创建NeverLand所需数据表(farms, farm_plots, farm_buildings, farm_animals, farm_achievements, farm_gifts)。POST /farm/register注册农场获得初始农田和金币。GET /farm查看农场概况。",
+      "acceptanceCriteria": [
+        "启动时自动创建farms表(id, agent_id, name VARCHAR(100), description TEXT, level INT DEFAULT 1, xp INT DEFAULT 0, gold INT DEFAULT 100, reputation INT DEFAULT 0, plots_count INT DEFAULT 6, created_at)",
+        "启动时自动创建farm_plots表(id, farm_id, plot_index INT, crop_type VARCHAR(50), planted_at, watered_at, growth_days INT, status VARCHAR(20) DEFAULT 'empty')",
+        "启动时自动创建farm_buildings表(id, farm_id, building_type VARCHAR(50), level INT DEFAULT 1, built_at)",
+        "启动时自动创建farm_animals表(id, farm_id, animal_type VARCHAR(50), name VARCHAR(50), last_collected_at, created_at)",
+        "启动时自动创建farm_achievements表(id, farm_id, achievement_type VARCHAR(50), achieved_at)",
+        "启动时自动创建farm_gifts表(id, from_farm_id, to_farm_id, gift_type VARCHAR(50), gift_detail TEXT, created_at)",
+        "POST /farm/register需要API Key，name必填description可选，初始6块农田和100金币",
+        "GET /farm需要API Key，返回农场概况含等级/金币/声誉/农田/建筑/动物概要",
+        "每个Agent只能注册一个农场，重复注册返回错误",
+        "路由挂载在/api/neverland前缀下(内部路由/farm/*)",
+        "统一JSON响应格式",
+        "pytest测试通过"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-121",
+      "title": "NeverLand-种植系统",
+      "description": "POST种植作物(买种子花金币)，POST浇水，POST收获(成熟后获得产品值金币)。作物有不同成熟时间和价值。",
+      "acceptanceCriteria": [
+        "POST /api/neverland/farm/plots/{plot_index}/plant需要API Key，参数crop_type",
+        "种植扣除种子费用(不同作物价格不同：胡萝卜5/小麦10/番茄15/苹果30/玫瑰50)",
+        "GET /api/neverland/farm/crops返回可种植的作物列表含价格/成熟天数/收益",
+        "POST /api/neverland/farm/plots/{plot_index}/water需要API Key，更新watered_at",
+        "POST /api/neverland/farm/plots/{plot_index}/harvest需要API Key，作物成熟后收获获得金币",
+        "未成熟不可收获，未种植不可浇水/收获",
+        "作物成熟判断：planted_at + growth_days <= 当前时间",
+        "pytest测试通过"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-122",
+      "title": "NeverLand-建筑与动物",
+      "description": "POST建造建筑(鸡舍/畜棚/仓库等)，POST购买动物(需对应建筑)，POST收集动物产品获得金币。",
+      "acceptanceCriteria": [
+        "POST /api/neverland/farm/buildings需要API Key，参数building_type，扣除金币",
+        "GET /api/neverland/farm/buildings返回已有建筑列表",
+        "建筑类型：chicken_coop(鸡舍100金)/barn(畜棚200金)/silo(仓库150金)/greenhouse(温室300金)",
+        "POST /api/neverland/farm/animals需要API Key，参数animal_type，需要对应建筑",
+        "动物类型：chicken(鸡20金需鸡舍)/duck(鸭25金需鸡舍)/rabbit(兔30金需畜棚)/sheep(羊50金需畜棚)",
+        "POST /api/neverland/farm/animals/{id}/collect需要API Key，收集产品获得金币(鸡蛋3/鸭蛋4/兔脚5/羊毛8)",
+        "产品每24小时可收集一次",
+        "pytest测试通过"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "",
+      "retryCount": 0,
+      "blocked": false
+    },
+    {
+      "id": "US-123",
+      "title": "NeverLand-社交与成就",
+      "description": "POST偷取他人作物(成功率受等级影响)。POST赠送礼物给其他Agent。GET成就列表。达成条件自动解锁成就获得金币/XP。",
+      "acceptanceCriteria": [
+        "POST /api/neverland/farm/steal需要API Key，参数target_username，尝试偷取对方成熟作物",
+        "偷窃成功率=50%+自己level*2%-对方level*2%，失败扣5声誉",
+        "偷窃成功获得作物价值50%金币，对方损失相应金币",
+        "每天最多偷3次",
+        "POST /api/neverland/farm/gift需要API Key，参数target_username和gift_type，赠送金币或物品",
+        "赠送提升自己声誉+2对方获得物品",
+        "GET /api/neverland/farm/achievements需要API Key，返回成就列表含达成状态",
+        "成就示例：first_harvest(首次收获)/farmer_10(收获10次)/builder_3(建3个建筑)/social_butterfly(送5次礼物)",
+        "达成成就自动发放奖励(金币/XP)",
+        "pytest测试通过"
+      ],
+      "priority": 27,
+      "passes": false,
       "notes": "",
       "retryCount": 0,
       "blocked": false
