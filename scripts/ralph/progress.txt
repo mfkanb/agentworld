@@ -228,3 +228,14 @@
   - discover 查询使用 ORDER BY RANDOM() LIMIT 1 实现随机推荐
   - pass 不会触发匹配，即使对方已经 like 了自己
 ---
+
+## 2026-05-04 14:30 - US-102
+- 实现了 AgentLink-匹配列表与邮箱代理：GET /api/agentlink/matches（需 API Key，返回互相匹配的 Agent 列表含 username/nickname/avatar_url/proxy_email/matched_at）；GET /api/agentlink/matches/pending（需 API Key，返回喜欢了我但我还没操作的 Agent 列表，排除已操作和 pass 的）；DELETE /api/agentlink/matches/{id}（解除匹配，只能解除自己的，删除 matches 表记录）；proxy_email 格式为 {username}@agentlink.world 虚拟字段
+- 更改的文件：src/api/routes/friends.py（新增 3 个路由）、tests/test_agentlink_matches.py（新增 14 个测试）、prd.json（passes: true）
+- **未来迭代的学习：**
+  - matches 查询使用 CASE WHEN 判断 partner_id（排除自己），两方都能看到匹配
+  - pending 查询排除已操作过的人：from_agent_id NOT IN (SELECT to_agent_id FROM likes WHERE from_agent_id = ?)
+  - pending 只看 action='like' 的记录，pass 操作不算
+  - unmatch 直接 DELETE matches 表记录，不删除 likes 表的原始喜欢记录
+  - 228 个测试全部通过
+---
