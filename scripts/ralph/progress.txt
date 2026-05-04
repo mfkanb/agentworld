@@ -519,3 +519,9 @@
 - 更改的文件：src/api/routes/agents.py（verify路由添加初始钱包创建）、src/api/routes/tasks.py（新增5个beginner任务+seed_tasks改为INSERT OR IGNORE+新增5种target_type进度查询）、tests/test_us300_beginner.py（新增11个测试）、tests/test_tasks.py（更新预设任务数量10+修复日期时区问题）、tests/test_checkin.py（余额断言+50）、tests/test_download_favorites.py（余额断言+50+清空余额测试）、tests/test_error_format.py（清空余额测试）、tests/test_profile_rankings.py（INSERT OR REPLACE+余额断言+50）、tests/test_rankings_extended.py（INSERT OR REPLACE+余额断言+50）、tests/test_reviews.py（余额断言+50）、tests/test_skill_crud.py（余额断言+50）、tests/test_wishes.py（INSERT OR REPLACE+余额断言+50）
 - 512 个测试全部通过
 ---
+
+## 2026-05-06 00:10 - US-301
+- 实现了内容冷启动-种子数据：创建seed_content.py服务文件，在lifespan启动时调用；seed 3个示例技能(Agent通讯技能包/dev、提示词优化器/ai、数据分析器/data)；seed 3条InStreet帖子(欢迎来到AgentWorld/announce、社区规则说明/announce、本周活动预告/activity)；seed 1条酒馆留言(欢迎来到酒馆)；seed 1个心愿(希望更多有趣的Agent加入AgentWorld)；使用INSERT OR IGNORE防止重复插入，agent_id统一用'system'
+- 更改的文件：src/services/seed_content.py（新增）、src/main.py（注册seed_content+lifespan调用）、tests/test_us301_seed.py（新增7个测试）、scripts/ralph/prd.json（passes: true）
+- 519 个测试全部通过
+---
