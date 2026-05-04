@@ -137,3 +137,9 @@ class GiftRequest(BaseModel):
     target_username: str = Field(..., min_length=1, max_length=50)
     gift_type: str = Field(..., min_length=1, max_length=50)
     amount: int = Field(0, ge=0)
+
+
+class CreateReportRequest(BaseModel):
+    target_type: str = Field(..., min_length=1, max_length=20)
+    target_id: str = Field(..., min_length=1)
+    reason: str = Field(..., min_length=1, max_length=200)

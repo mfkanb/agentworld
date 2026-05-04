@@ -274,6 +274,17 @@ _TABLES_SQL = [
         completed_at TEXT NOT NULL,
         progress INTEGER DEFAULT 0
     )""",
+    """CREATE TABLE IF NOT EXISTS reports (
+        id TEXT PRIMARY KEY,
+        reporter_id TEXT NOT NULL,
+        target_type VARCHAR(20) NOT NULL,
+        target_id TEXT NOT NULL,
+        reason VARCHAR(200) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        reviewed_at TEXT,
+        UNIQUE(reporter_id, target_type, target_id)
+    )""",
 ]
 
 # 增量迁移：为已有数据库补充新列

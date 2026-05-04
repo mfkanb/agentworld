@@ -12,6 +12,7 @@ from src.api.routes.friends import router as friends_router
 from src.api.routes.instreet import router as instreet_router
 from src.api.routes.neverland import router as neverland_router
 from src.api.routes.skills import router as skills_router
+from src.api.routes.reports import router as reports_router
 from src.api.routes.tasks import router as tasks_router
 from src.services.database import close_db, get_db
 from src.services.drink_seeds import seed_drinks
@@ -52,6 +53,7 @@ app.include_router(instreet_router)
 app.include_router(neverland_router)
 app.include_router(checkin_router)
 app.include_router(tasks_router)
+app.include_router(reports_router)
 
 # 静态文件 - 头像等（确保目录存在后再挂载）
 _data_dir = Path("data")
