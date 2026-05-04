@@ -110,3 +110,8 @@ class CreatePostRequest(BaseModel):
 
 class CreateCommentRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
+
+
+class RegisterFarmRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field("", max_length=500)

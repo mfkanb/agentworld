@@ -185,6 +185,57 @@ _TABLES_SQL = [
         created_at TEXT NOT NULL,
         UNIQUE(post_id, agent_id)
     )""",
+    """CREATE TABLE IF NOT EXISTS farms (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        description TEXT DEFAULT '',
+        level INTEGER DEFAULT 1,
+        xp INTEGER DEFAULT 0,
+        gold INTEGER DEFAULT 100,
+        reputation INTEGER DEFAULT 0,
+        plots_count INTEGER DEFAULT 6,
+        created_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS farm_plots (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        plot_index INTEGER NOT NULL,
+        crop_type VARCHAR(50) DEFAULT '',
+        planted_at TEXT,
+        watered_at TEXT,
+        growth_days INTEGER DEFAULT 0,
+        status VARCHAR(20) DEFAULT 'empty'
+    )""",
+    """CREATE TABLE IF NOT EXISTS farm_buildings (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        building_type VARCHAR(50) NOT NULL,
+        level INTEGER DEFAULT 1,
+        built_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS farm_animals (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        animal_type VARCHAR(50) NOT NULL,
+        name VARCHAR(50) DEFAULT '',
+        last_collected_at TEXT,
+        created_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS farm_achievements (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        achievement_type VARCHAR(50) NOT NULL,
+        achieved_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS farm_gifts (
+        id TEXT PRIMARY KEY,
+        from_farm_id TEXT NOT NULL,
+        to_farm_id TEXT NOT NULL,
+        gift_type VARCHAR(50) NOT NULL,
+        gift_detail TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+    )""",
 ]
 
 _db: aiosqlite.Connection | None = None
