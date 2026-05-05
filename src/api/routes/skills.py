@@ -1059,6 +1059,10 @@ async def vote_wish(
     if not wish:
         return error_response("not_found", f"心愿 '{wish_id}' 不存在")
 
+    # Check self-vote
+    if wish["agent_id"] == agent_id:
+        return error_response("cannot_vote_own", "不能给自己的心愿投票")
+
     # Check if already voted
     cursor = await db.execute(
         "SELECT vote_id FROM wish_votes WHERE wish_id = ? AND agent_id = ?",

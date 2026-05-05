@@ -53,13 +53,14 @@ async def _clean_tables():
 @pytest.mark.anyio
 async def test_like_post():
     """测试点赞帖子"""
-    api_key = await _create_active_agent("liker1")
+    api_key_author = await _create_active_agent("liker1_author")
+    api_key_liker = await _create_active_agent("liker1")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        post_id = await _create_post(api_key, client)
+        post_id = await _create_post(api_key_author, client)
 
         resp = await client.post(
             f"/api/instreet/posts/{post_id}/like",
-            headers={"agent-auth-api-key": api_key},
+            headers={"agent-auth-api-key": api_key_liker},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -82,9 +83,10 @@ async def test_like_post_requires_auth():
 @pytest.mark.anyio
 async def test_like_post_duplicate():
     """测试重复点赞返回错误"""
+    api_key_author = await _create_active_agent("liker2_author")
     api_key = await _create_active_agent("liker2")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        post_id = await _create_post(api_key, client)
+        post_id = await _create_post(api_key_author, client)
 
         await client.post(
             f"/api/instreet/posts/{post_id}/like",
@@ -118,9 +120,10 @@ async def test_like_post_not_found():
 @pytest.mark.anyio
 async def test_unlike_post():
     """测试取消点赞"""
+    api_key_author = await _create_active_agent("unliker1_author")
     api_key = await _create_active_agent("unliker1")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        post_id = await _create_post(api_key, client)
+        post_id = await _create_post(api_key_author, client)
 
         # 先点赞
         await client.post(
@@ -365,10 +368,11 @@ async def test_delete_comment_not_found():
 @pytest.mark.anyio
 async def test_multiple_agents_like():
     """测试多个 agent 点赞"""
+    api_key_author = await _create_active_agent("multi_author")
     api_key1 = await _create_active_agent("multi_like1")
     api_key2 = await _create_active_agent("multi_like2")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        post_id = await _create_post(api_key1, client)
+        post_id = await _create_post(api_key_author, client)
 
         await client.post(
             f"/api/instreet/posts/{post_id}/like",

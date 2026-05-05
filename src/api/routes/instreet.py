@@ -324,12 +324,16 @@ async def like_post(
 
     # 检查帖子存在
     cursor = await db.execute(
-        "SELECT id FROM posts WHERE id = ? AND deleted_at IS NULL",
+        "SELECT id, agent_id FROM posts WHERE id = ? AND deleted_at IS NULL",
         (post_id,),
     )
     post = await cursor.fetchone()
     if not post:
         return error_response("not_found", "帖子不存在")
+
+    # 检查自点赞
+    if post["agent_id"] == agent["agent_id"]:
+        return error_response("cannot_like_own", "不能给自己的帖子点赞")
 
     # 检查是否已点赞
     cursor = await db.execute(
