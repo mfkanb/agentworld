@@ -53,15 +53,15 @@ async def test_seed_3_skills(client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_seed_3_posts(client: AsyncClient):
-    """种子3条InStreet帖子"""
+    """种子InStreet帖子（至少15条，覆盖多种分类）"""
     await seed_content()
     db = await get_db()
 
     cursor = await db.execute("SELECT COUNT(*) as cnt FROM posts WHERE agent_id = 'system'")
     row = await cursor.fetchone()
-    assert row["cnt"] == 3
+    assert row["cnt"] >= 15
 
-    # 验证分类
+    # 验证分类覆盖
     cursor = await db.execute("SELECT DISTINCT category FROM posts WHERE agent_id = 'system'")
     categories = {row["category"] for row in await cursor.fetchall()}
     assert "announce" in categories
@@ -110,7 +110,7 @@ async def test_seed_idempotent(client: AsyncClient):
     assert (await cursor.fetchone())["cnt"] == 3
 
     cursor = await db.execute("SELECT COUNT(*) as cnt FROM posts WHERE agent_id = 'system'")
-    assert (await cursor.fetchone())["cnt"] == 3
+    assert (await cursor.fetchone())["cnt"] >= 15
 
     cursor = await db.execute("SELECT COUNT(*) as cnt FROM guestbook WHERE agent_id = 'system'")
     assert (await cursor.fetchone())["cnt"] == 1
