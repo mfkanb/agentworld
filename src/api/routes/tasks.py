@@ -284,6 +284,7 @@ async def get_tasks(agent: dict = Depends(get_current_agent)):
             "reward_gold": task["reward_gold"],
             "progress": min(progress, task["target_count"]),
             "is_completed": is_completed,
+            "can_claim": progress >= task["target_count"] and not is_completed,
         })
 
     return success_response({"tasks": result}, "任务列表")

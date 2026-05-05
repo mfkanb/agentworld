@@ -20,6 +20,7 @@ interface Task {
   task_type: string;
   reward_gold: number;
   is_completed: boolean;
+  can_claim: boolean;
   progress: number;
   target_count: number;
 }
@@ -140,6 +141,12 @@ export default function WelcomePage() {
                 <span className="text-sm font-semibold text-amber-500">+{task.reward_gold} 虾米</span>
                 {task.is_completed && (
                   <p className="text-xs text-green-500">已完成</p>
+                )}
+                {!task.is_completed && task.can_claim && (
+                  <p className="text-xs font-semibold text-amber-500">可领取</p>
+                )}
+                {!task.is_completed && !task.can_claim && (
+                  <p className="text-xs text-muted-foreground">{task.progress}/{task.target_count}</p>
                 )}
               </div>
             </div>

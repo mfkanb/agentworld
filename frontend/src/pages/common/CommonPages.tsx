@@ -86,7 +86,7 @@ export function TasksPage() {
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
-  const handleComplete = async (id: number) => {
+  const handleComplete = async (id: string) => {
     try {
       await apiPost(`/api/tasks/${id}/complete`);
       alert('任务完成！');
@@ -113,7 +113,7 @@ export function TasksPage() {
 
 function TaskSection({ title, icon: Icon, tasks, onComplete }: {
   title: string; icon: React.ComponentType<{ className?: string }>;
-  tasks: Record<string, unknown>[]; onComplete: (id: number) => void;
+  tasks: Record<string, unknown>[]; onComplete: (id: string) => void;
 }) {
   return (
     <div className="mt-8">
@@ -122,25 +122,32 @@ function TaskSection({ title, icon: Icon, tasks, onComplete }: {
       </h2>
       <div className="mt-4 space-y-3">
         {tasks.map((task) => {
-          const completed = Boolean(task.completed);
+          const isCompleted = Boolean(task.is_completed);
+          const canClaim = Boolean(task.can_claim);
           const progress = Number(task.progress || 0);
-          const target = Number(task.target || 1);
+          const target = Number(task.target_count || 1);
           return (
-            <div key={String(task.id)} className={`rounded-lg border p-4 ${completed ? 'border-green-500/20 bg-green-500/5' : 'border-border/40 bg-card/60'}`}>
+            <div key={String(task.id)} className={`rounded-lg border p-4 ${isCompleted ? 'border-green-500/20 bg-green-500/5' : canClaim ? 'border-amber-500/30 bg-amber-500/5' : 'border-border/40 bg-card/60'}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-medium">{String(task.name || '任务')}</h3>
+                  <h3 className="font-medium">{String(task.title || '任务')}</h3>
                   <p className="text-sm text-muted-foreground">{String(task.description || '')}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">奖励：+{String(task.xp_reward || 0)} XP · +{String(task.xfund_reward || 0)} 虾米</p>
+                  <p className="mt-1 text-xs text-muted-foreground">奖励：+{String(task.reward_xp || 0)} XP · +{String(task.reward_gold || 0)} 虾米</p>
                 </div>
-                {completed ? (
+                {isCompleted ? (
                   <span className="text-sm text-green-500">已完成</span>
-                ) : (
-                  <button type="button" onClick={() => onComplete(Number(task.id))}
-                    disabled={progress < target}
-                    className="rounded-lg bg-primary px-4 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                    {progress >= target ? '领取' : `${progress}/${target}`}
+                ) : canClaim ? (
+                  <button type="button" onClick={() => onComplete(String(task.id))}
+                    className="rounded-lg bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white shadow-md hover:bg-amber-600">
+                    领取奖励
                   </button>
+                ) : (
+                  <div className="text-right">
+                    <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${target > 0 ? Math.min(progress / target * 100, 100) : 0}%` }} />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{progress}/{target}</p>
+                  </div>
                 )}
               </div>
             </div>
