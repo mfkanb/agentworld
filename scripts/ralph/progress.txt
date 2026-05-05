@@ -547,3 +547,27 @@
 - 实现了前端体验优化：(1)注册表单username输入框实时显示规则提示，输入非法字符时红色边框+红色提示文字；(2)首页Hero区域增加醒目的'立即体验'大按钮(lg字体+阴影)+原'加入AgentWorld'辅助按钮；(3)挑战题页面增加说明文字'这是一道数学题，请计算并输入数字答案'，答案输入框placeholder='请输入数字答案'；(4)个人中心ProfileTab增加新手任务完成进度展示(已完成X/5+进度条)
 - 更改的文件：frontend/src/pages/world/WorldPage.tsx（立即体验按钮+username实时校验+挑战题说明）、frontend/src/pages/common/ProfilePages.tsx（新手任务进度展示）、scripts/ralph/prd.json（passes: true）
 ---
+
+## 2026-05-05 14:00 - US-400
+- 实现了自投票和自点赞防护：wish vote端点增加author校验(cannot_vote_own)，instreet post like端点增加author校验(cannot_like_own)；新增4个测试覆盖自操作拒绝和他人操作正常；修复已有instreet点赞测试使用独立author/lik­er避免冲突
+- 更改的文件：src/api/routes/skills.py（vote_wish加自投检查）、src/api/routes/instreet.py（like_post加自赞检查+SELECT加agent_id列）、tests/test_us400_self_action.py（新增4个测试）、tests/test_instreet_likes_comments.py（4个测试改用独立liker）
+- 530 个测试全部通过，npm run build 通过
+---
+
+## 2026-05-05 15:00 - US-401
+- 实现了任务可领取状态标识：GET /api/tasks返回的每个任务新增can_claim字段(progress>=target_count且未完成时为true)；前端TasksPage根据can_claim/is_completed显示三种状态(已完成/领取奖励按钮/进度条)；前端WelcomePage新手任务也展示可领取状态；修复TaskSection的id类型从number改为string匹配实际API
+- 更改的文件：src/api/routes/tasks.py（新增can_claim字段）、frontend/src/pages/common/CommonPages.tsx（任务列表UI三种状态+修复字段名/类型）、frontend/src/pages/common/WelcomePage.tsx（新手任务可领取状态）、tests/test_us401_can_claim.py（新增4个测试）
+- 534 个测试全部通过，npm run build 通过
+---
+
+## 2026-05-05 16:00 - US-402
+- 验证了InStreet种子内容扩充：seed_content.py从3条扩充到16条帖子，覆盖7种类别(announce/tech/discuss/share/activity/ask)；帖子包括Agent技能开发指南、通讯协议对比、Prompt技巧、社区话题讨论、经验分享、活动回顾、新手求助等；部分帖子设置初始likes_count(1-5)和comments_count(0-2)模拟真实社区氛围；6个pytest测试验证种子数量/类别覆盖/system agent/INSERT OR IGNORE/真实点赞/API可见性
+- 更改的文件：src/services/seed_content.py（新增13条种子帖子）、tests/test_us402_seed_content.py（新增6个测试）
+- 540 个测试全部通过，npm run build 通过
+---
+
+## 2026-05-05 16:00 - US-402
+- 实现了InStreet种子内容扩充：新增13条种子帖子(3条tech+3条discuss+3条share+2条activity+2条ask)，总计16条覆盖5个分类；部分帖子设置初始likes_count(1-5)模拟社区氛围；更新INSERT语句支持likes_count/comments_count参数；修复US-301测试适配新帖子数量(3→>=15)
+- 更改的文件：src/services/seed_content.py（新增13条种子帖子+INSERT支持likes/comments参数）、tests/test_us402_seed_content.py（新增6个测试）、tests/test_us301_seed.py（更新帖子数量断言）
+- 540 个测试全部通过，npm run build 通过
+---

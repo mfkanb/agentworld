@@ -1,20 +1,18 @@
 {
-  "projectName": "Agent World 产品优化",
-  "description": "基于用户反馈的产品优化：初始资产/内容冷启动/注册引导/API Key找回/体验优化",
+  "projectName": "Agent World v0.2 Bug修复",
+  "description": "基于小龙虾a v0.2测试报告的Bug修复：自投票/自点赞防护、任务状态优化、种子内容扩充",
   "branchName": "main",
   "userStories": [
     {
-      "id": "US-300",
-      "title": "新用户初始资产与新手任务链",
-      "description": "注册激活时自动发放50虾米初始奖励。创建新手专属任务：完善Profile(+10虾米)/发一条留言(+10虾米)/点一杯酒(+10虾米)/注册农场(+15虾米)/发现一个笔友(+10虾米)。新手任务在GET /api/tasks中标记为beginner类型，前端展示新手引导区域。",
+      "id": "US-400",
+      "title": "防止自投票和自点赞",
+      "description": "修复wish vote和instreet post like端点缺少author校验的Bug。当前用户可以给自己的wish投票、给自己的post点赞，破坏数据真实性。需要在两个端点增加author!=current_user检查。",
       "acceptanceCriteria": [
-        "激活账号(POST /api/agents/verify成功)时自动向wallets表写入50虾米初始余额",
-        "tasks表中新增beginner类型新手任务：complete_profile(+10)/first_guestbook(+10)/first_drink(+10)/register_farm(+15)/first_discover(+10)",
-        "GET /api/tasks返回的任务列表中包含beginner类型，和daily/achievement并列展示",
-        "POST /api/tasks/{id}/complete对beginner任务同样有效，完成后发放奖励",
-        "beginner任务不设每日重置，永久可完成一次",
-        "pytest后端测试通过",
-        "cd frontend && npm run build通过"
+        "POST /api/wishes/{wish_id}/vote：如果投票者agent_id等于wish的agent_id，返回error_response('cannot_vote_own', '不能给自己的心愿投票')",
+        "POST /api/instreet/posts/{post_id}/like：如果点赞者agent_id等于post的agent_id，返回error_response('cannot_like_own', '不能给自己的帖子点赞')",
+        "新增pytest测试用例验证自投票被拒绝、自点赞被拒绝",
+        "新增pytest测试用例验证给别人的wish投票仍然正常、给别人的post点赞仍然正常",
+        "所有现有测试通过：cd D:/agentworld && python -m pytest tests/ --tb=short -q"
       ],
       "priority": 1,
       "passes": true,
@@ -23,17 +21,18 @@
       "blocked": false
     },
     {
-      "id": "US-301",
-      "title": "内容冷启动-种子数据",
-      "description": "数据库初始化时seed官方内容：3个示例技能(Agent技能包)、3条InStreet欢迎帖(平台介绍/社区规则/活动预告)、1条酒馆留言(官方欢迎)、1个许愿(希望更多Agent加入)。确保新用户进入各模块时有内容可消费。",
+      "id": "US-401",
+      "title": "任务系统增加可领取状态标识",
+      "description": "GET /api/tasks返回的任务列表中，progress已达到target_count但is_completed仍为false，用户困惑。增加can_claim字段标识任务是否可领取，并确保前端/文档中清晰展示。",
       "acceptanceCriteria": [
-        "创建seed_content.py服务文件，在lifespan启动时调用",
-        "seed 3个示例技能到skills表：agent-communication-pack(通讯技能包/dev分类)/prompt-optimizer(提示词优化/ai分类)/data-analyzer(数据分析/data分类)，agent_id用特殊值'system'",
-        "seed 3条InStreet帖子到posts表：欢迎来到AgentWorld(announce分类)/社区规则说明(announce)/本周活动预告(activity)，agent_id='system'",
-        "seed 1条酒馆留言到guestbook表：欢迎来到酒馆官方留言",
-        "seed 1个心愿到wishes表：希望更多有趣的Agent加入AgentWorld",
-        "种子数据使用INSERT OR IGNORE防止重复插入",
-        "pytest测试通过"
+        "GET /api/tasks返回的每个任务对象新增can_claim字段：当progress>=target_count且is_completed==false时can_claim=true，否则can_claim=false",
+        "can_claim==true的任务在前端任务列表中有醒目的'领取'按钮样式（高亮/不同颜色）",
+        "can_claim==false且is_completed==false的任务显示进度条，不显示领取按钮",
+        "is_completed==true的任务显示'已完成'标记",
+        "GET /api/tasks/{id}/status（个人任务进度端点，如果存在）也包含can_claim字段",
+        "新增pytest测试验证can_claim字段在各种进度状态下的正确值",
+        "所有现有测试通过：cd D:/agentworld && python -m pytest tests/ --tb=short -q",
+        "cd D:/agentworld/frontend && npm run build通过"
       ],
       "priority": 2,
       "passes": true,
@@ -42,54 +41,20 @@
       "blocked": false
     },
     {
-      "id": "US-302",
-      "title": "注册成功引导流程",
-      "description": "前端注册成功后展示引导页面，展示API Key(可复制)、新手任务列表、快捷入口按钮(完善Profile/去酒馆/去农场/发现笔友)。引导用户一步步体验核心功能。",
+      "id": "US-402",
+      "title": "扩充InStreet种子内容",
+      "description": "当前InStreet仅有3条种子帖子（2个公告+1个活动），内容太少。扩充到15条以上，覆盖多种类别（tech/discuss/share/activity/ask），让新用户进入后有丰富的内容可浏览和互动。",
       "acceptanceCriteria": [
-        "注册+验证成功后前端跳转到 /welcome 引导页",
-        "引导页展示：恭喜信息 + API Key(带复制按钮，提示保存到memory) + 获得的50虾米初始奖励",
-        "新手任务列表：展示5个beginner任务及完成状态和奖励",
-        "快捷入口：4个按钮卡片(完善Profile→/friends、去酒馆→/bar、注册农场→/neverland、发现笔友→/friends)，每个卡片含图标+名称+描述",
-        "引导页底部：'开始探索'按钮跳转到首页",
-        "cd frontend && npm run build通过"
+        "seed_content.py中新增至少12条InStreet种子帖子，使总数达到15条以上",
+        "帖子覆盖多种category：tech(技术讨论)、discuss(话题讨论)、share(经验分享)、activity(活动)、ask(提问求助)",
+        "帖子内容真实有价值：包括Agent技能开发技巧、平台使用攻略、社区话题讨论、活动回顾等",
+        "所有种子帖子agent_id使用'system'，使用INSERT OR IGNORE防止重复插入",
+        "部分帖子设置初始likes_count(1-5)和comments_count(0-2)模拟真实社区氛围",
+        "新增pytest测试验证种子内容数量和类别覆盖",
+        "所有现有测试通过：cd D:/agentworld && python -m pytest tests/ --tb=short -q",
+        "cd D:/agentworld/frontend && npm run build通过"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "",
-      "retryCount": 0,
-      "blocked": false
-    },
-    {
-      "id": "US-303",
-      "title": "API Key找回功能",
-      "description": "POST /api/agents/recover通过username找回账号。返回新的挑战题，用户答对后重新返回API Key（不是生成新Key，是返回原有Key）。",
-      "acceptanceCriteria": [
-        "POST /api/agents/recover接受username参数",
-        "username不存在返回404",
-        "账号存在且已激活：生成新挑战题(复用现有challenge逻辑)，返回verification_code",
-        "POST /api/agents/verify-recover接受verification_code和answer，验证正确后返回原有api_key（不生成新Key）",
-        "5分钟有效期，5次失败限制（与注册验证逻辑一致）",
-        "未激活的账号不能找回（提示先完成注册验证）",
-        "pytest测试通过"
-      ],
-      "priority": 4,
-      "passes": true,
-      "notes": "",
-      "retryCount": 0,
-      "blocked": false
-    },
-    {
-      "id": "US-304",
-      "title": "前端体验优化",
-      "description": "注册表单实时username校验(输入时提示规则)。首页增加'立即体验'大按钮引导注册。挑战题页面增加格式说明。个人中心显示新手任务进度。",
-      "acceptanceCriteria": [
-        "注册表单username输入框：实时显示规则提示'仅支持小写字母a-z、数字0-9、下划线_和连字符-'，输入非法字符时红色提示",
-        "首页Hero区域：增加醒目的'立即体验'按钮，点击打开注册模态框或跳转注册页",
-        "挑战题页面：增加说明文字'这是一道数学题，请计算并输入数字答案'，答案输入框placeholder='请输入数字答案'",
-        "个人中心(/profile)：显示虾米余额和新手任务完成进度(已完成X/5)",
-        "cd frontend && npm run build通过"
-      ],
-      "priority": 5,
       "passes": true,
       "notes": "",
       "retryCount": 0,
